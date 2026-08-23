@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace BAGArt\TelegramBotAntispam\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * Daily aggregated counters per (date, bot, chat, group).
+ *
+ * @property string $id
+ * @property string $stat_date
+ * @property string $bot_id
+ * @property int|null $chat_id
+ * @property string|null $group_id
+ * @property int $detections
+ * @property int $violations
+ */
+final class AntispamStat extends Model
+{
+    use HasFactory;
+    use HasUuids;
+
+    protected $table = 'antispam_stats';
+
+    protected $fillable = [
+        'stat_date',
+        'bot_id',
+        'chat_id',
+        'group_id',
+        'detections',
+        'violations',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'detections' => 'integer',
+            'violations' => 'integer',
+        ];
+    }
+
+    /** Factory lives in the root app (Database\Factories), not inside the module. */
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\AntispamStatFactory::new();
+    }
+}
