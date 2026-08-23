@@ -20,6 +20,10 @@ use Illuminate\Support\Facades\Redis;
  */
 final class RedisBatchCounter implements Counter
 {
+    /**
+     * Returns ONE JSON payload (immune to phpredis Lua-table indexing quirks):
+     * {"counts": {"messages:5": "2", "fp:<hash>": "3"}, "recent": ["<hash>", …]}
+     */
     private const string LUA = <<<'LUA'
         local prefix, scope, eventId = ARGV[1], ARGV[2], ARGV[3]
         local now, grace = tonumber(ARGV[4]), tonumber(ARGV[5])
@@ -35,14 +39,13 @@ final class RedisBatchCounter implements Counter
             end
         end
 
-        local result = {}
+        local counts = {}
         for _, d in ipairs(dims) do
             if d.counts then
                 local key = prefix .. scope .. ':' .. d.name
                 redis.call('ZREMRANGEBYSCORE', key, '-inf', now - d.prune)
                 for _, w in ipairs(d.counts) do
-                    table.insert(result, d.name .. ':' .. w)
-                    table.insert(result, tostring(redis.call('ZCOUNT', key, now - w, '+inf')))
+                    counts[d.name .. ':' .. w] = tostring(redis.call('ZCOUNT', key, now - w, '+inf'))
                 end
             end
         end
@@ -57,15 +60,12 @@ final class RedisBatchCounter implements Counter
                 redis.call('ZADD', repKey, now, eventId)
                 redis.call('ZREMRANGEBYSCORE', repKey, '-inf', now - fpWindow)
                 redis.call('EXPIRE', repKey, fpWindow + grace)
-                table.insert(result, 'fp:' .. fp)
-                table.insert(result, tostring(redis.call('ZCARD', repKey)))
+                counts['fp:' .. fp] = tostring(redis.call('ZCARD', repKey))
                 table.insert(recent, fp)
             end
         end
-        table.insert(result, 'recent')
-        table.insert(result, cjson.encode(recent))
 
-        return result
+        return cjson.encode({ counts = counts, recent = recent })
         LUA;
 
     /** @var array<string, array<int>> dimension → [prune window, counted windows…] */
@@ -103,7 +103,7 @@ final class RedisBatchCounter implements Counter
             ? ($this->connectionResolver)($this->connection)
             : Redis::connection($this->connection);
 
-        $result = $connection->eval(
+        $payload = $connection->eval(
             self::LUA,
             [
                 'antispam:c:',
@@ -119,31 +119,27 @@ final class RedisBatchCounter implements Counter
             0,
         );
 
-        return $this->toSnapshot(is_array($result) ? $result : [], $batch);
+        $data = is_string($payload) ? json_decode($payload, true) : null;
+        $counts = is_array($data['counts'] ?? null) ? array_map('strval', $data['counts']) : [];
+        $recent = is_array($data['recent'] ?? null) ? array_map('strval', $data['recent']) : [];
+
+        return $this->toSnapshot($counts, $recent);
     }
 
-    /** @param  list<string>  $result */
-    private function toSnapshot(array $result, CounterBatch $batch): CounterSnapshot
+    /** @param  array<string, string>  $counts  field → count ("messages:5", "fp:<hash>") */
+    private function toSnapshot(array $counts, array $recent): CounterSnapshot
     {
         /** @var array<string, int> $map */
         $map = [];
         $fingerprints = [];
-        $recent = [];
 
-        for ($i = 0, $n = count($result); $i + 1 < $n; $i += 2) {
-            [$field, $value] = [(string) $result[$i], (string) $result[$i + 1]];
-            if ($field === 'recent') {
-                $decoded = json_decode($value, true);
-                $recent = is_array($decoded) ? $decoded : [];
+        foreach ($counts as $field => $value) {
+            if (str_starts_with((string) $field, 'fp:')) {
+                $fingerprints[substr((string) $field, 3)] = (int) $value;
 
                 continue;
             }
-            if (str_starts_with($field, 'fp:')) {
-                $fingerprints[substr($field, 3)] = (int) $value;
-
-                continue;
-            }
-            $map[$field] = (int) $value;
+            $map[(string) $field] = (int) $value;
         }
 
         $messages5m = $map['messages:300'] ?? 0;

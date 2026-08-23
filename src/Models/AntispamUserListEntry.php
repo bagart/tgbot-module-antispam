@@ -46,9 +46,9 @@ final class AntispamUserListEntry extends Model
         ];
     }
 
-    /** Factory lives in the root app (Database\Factories), not inside the module. */
+
     protected static function newFactory(): Factory
     {
-        return \Database\Factories\AntispamUserListEntryFactory::new();
+        return \BAGArt\TelegramBotAntispam\Database\Factories\AntispamUserListEntryFactory::new();
     }
 }

@@ -21,7 +21,7 @@ final class RepeatedMediaRule extends RepeatedContentRule
     private const int DEFAULT_REPEAT_LIMIT = 3;
     private const int DEFAULT_RATE_LIMIT = 4;
 
-    public function __construct(MessageFingerprint $fingerprint = new MessageFingerprint)
+    public function __construct(MessageFingerprint $fingerprint = new MessageFingerprint())
     {
         parent::__construct($fingerprint);
     }

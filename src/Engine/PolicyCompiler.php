@@ -150,8 +150,13 @@ final readonly class PolicyCompiler
         foreach ($this->registry as $rule) {
             $enabled[$rule->id()] = true;
         }
-        foreach ((array) ($settings['disabled_rules'] ?? []) as $ruleId) {
-            $enabled[(string) $ruleId] = false;
+
+        // accepts both formats: list ["rule.id"] and map ["rule.id" => false]
+        foreach ((array) ($settings['disabled_rules'] ?? []) as $key => $value) {
+            $ruleId = is_string($key) ? $key : $value;
+            if (is_string($ruleId)) {
+                $enabled[$ruleId] = false;
+            }
         }
 
         return $enabled;

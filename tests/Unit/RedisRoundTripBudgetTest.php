@@ -20,11 +20,11 @@ final class RedisRoundTripBudgetTest extends TestCase
         $spy = new class () {
             public int $evalCalls = 0;
 
-            public function eval(string $script, array $args = [], int $numKeys = 0): array
+            public function eval(string $script, array $args = [], int $numKeys = 0): string
             {
                 ++$this->evalCalls;
 
-                return ['messages:5' => '1', 'messages:30' => '1', 'recent', '[]'];
+                return '{"counts":{"messages:5":"1","messages:30":"1"},"recent":[]}';
             }
         };
 
@@ -47,7 +47,7 @@ final class RedisRoundTripBudgetTest extends TestCase
     public function test_fingerprint_hash_is_stable_across_normalizations(): void
     {
         // the rule side must compute the same key the collector recorded
-        $fp = new MessageFingerprint;
+        $fp = new MessageFingerprint();
         self::assertSame($fp->of('Hello  World!'), $fp->of('hello world'));
     }
 }

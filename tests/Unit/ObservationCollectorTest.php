@@ -15,7 +15,7 @@ final class ObservationCollectorTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->collector = new ObservationCollector;
+        $this->collector = new ObservationCollector();
     }
 
     public function test_media_identity_uses_file_unique_id(): void
@@ -76,7 +76,7 @@ final class ObservationCollectorTest extends TestCase
 
     public function test_collector_and_rules_share_fingerprint_semantics(): void
     {
-        $fp = new MessageFingerprint;
+        $fp = new MessageFingerprint();
         $context = Fixtures::context(text: 'Buy SPAM now!!!');
 
         $batch = $this->collector->collect('bot', 100, 42, $context->message);

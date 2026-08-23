@@ -52,9 +52,9 @@ final class AntispamUserStrikes extends Model
         ];
     }
 
-    /** Factory lives in the root app (Database\Factories), not inside the module. */
+
     protected static function newFactory(): Factory
     {
-        return \Database\Factories\AntispamUserStrikesFactory::new();
+        return \BAGArt\TelegramBotAntispam\Database\Factories\AntispamUserStrikesFactory::new();
     }
 }

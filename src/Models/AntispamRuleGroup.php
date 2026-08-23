@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 final class AntispamRuleGroup extends Model
 {
+    use HasUuids;
+
     public $timestamps = false;
 
     protected $table = 'antispam_rule_groups';

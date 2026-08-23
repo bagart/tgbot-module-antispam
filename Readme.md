@@ -47,4 +47,20 @@ src/
 ├── UserList/                   # whitelist/blacklist gating (bypass module vs enforcement)
 ├── DryRun/, Replay/            # breakdown without side effects; old vs new policy comparison
 └── Processors/                 # message processor + /antispam and /report commands
+
+config/antispam.php            # module config (merged by the service provider)
+database/migrations/           # antispam tables (loaded via loadMigrationsFrom)
+database/factories/            # Eloquent factories for the antispam models
+database/seeders/              # AntispamDefaultsSeeder (default rule groups)
+tests/Unit/, tests/Feature/    # PHPUnit unit + Pest feature tests
 ```
+
+## Testing
+
+```bash
+composer test   # runs pest from the host platform vendor (../../..)
+```
+
+Feature tests boot the host platform app (TestCase + RefreshDatabase are bound in
+the platform `tests/Pest.php`); Redis integration tests auto-skip without a live
+Redis.
