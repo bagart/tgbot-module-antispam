@@ -22,6 +22,8 @@
     "require": {
         "php": "^8.5",
         "bagart/telegram-bot-lib": "*",
+        "bagart/telegram-bot-management": "*",
+        "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^13.0"
     },
     "autoload": {

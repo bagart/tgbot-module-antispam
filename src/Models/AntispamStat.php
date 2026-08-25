@@ -25,6 +25,9 @@ final class AntispamStat extends Model
     use HasFactory;
     use HasUuids;
 
+    // antispam_stats carries no created_at/updated_at columns
+    public $timestamps = false;
+
     protected $table = 'antispam_stats';
 
     protected $fillable = [
@@ -39,6 +42,7 @@ final class AntispamStat extends Model
     protected function casts(): array
     {
         return [
+            'stat_date' => 'date:Y-m-d',
             'detections' => 'integer',
             'violations' => 'integer',
         ];

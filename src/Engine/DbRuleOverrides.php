@@ -65,4 +65,29 @@ final readonly class DbRuleOverrides
 
         return $settings;
     }
+
+    /**
+     * Merges DB overrides into module settings KEY-WISE: within list/map keys
+     * (rule_scores, disabled_rules, …) DB wins per rule id, while chat-level
+     * entries for rules absent from the DB survive. A plain array_merge would
+     * let empty DB sections wipe chat settings wholesale.
+     *
+     * @param  array<string, mixed>  $moduleSettings
+     * @param  array<string, mixed>  $dbSettings
+     * @return array<string, mixed>
+     */
+    public static function mergeInto(array $moduleSettings, array $dbSettings): array
+    {
+        $merged = $moduleSettings;
+
+        foreach ($dbSettings as $key => $value) {
+            if (is_array($value)) {
+                $merged[$key] = array_merge((array) ($merged[$key] ?? []), $value);
+            } else {
+                $merged[$key] = $value;
+            }
+        }
+
+        return $merged;
+    }
 }

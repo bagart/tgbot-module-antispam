@@ -8,6 +8,7 @@ use BAGArt\AsyncKernel\Wrappers\ASKLogWrapper;
 use BAGArt\TelegramBot\Configs\TgBotConfig;
 use BAGArt\TelegramBot\Contracts\Modules\ModuleSettingsContract;
 use BAGArt\TelegramBot\TgApi\Types\DTO\MessageTypeDTO;
+use BAGArt\TelegramBotAntispam\Captcha\CaptchaService;
 use BAGArt\TelegramBotAntispam\Counters\Counter;
 use BAGArt\TelegramBotAntispam\Counters\ObservationCollector;
 use BAGArt\TelegramBotAntispam\Domain\AggregatedScore;
@@ -53,6 +54,7 @@ final readonly class AntispamPipeline
         private ModuleSettingsContract $settings,
         private ASKLogWrapper $logger,
         private \BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides $dbRuleOverrides = new \BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides(),
+        private ?CaptchaService $captcha = null,
         private array $excludeUserIds = [],
     ) {
     }
@@ -78,10 +80,13 @@ final readonly class AntispamPipeline
             $moduleSettings = [];
         }
 
-        // DB rule overrides win over platform/chat settings; both feed the
-        // compiled plan (cached — no per-webhook SQL after compile)
+        // DB rule overrides win over platform/chat settings per rule id; both
+        // feed the compiled plan (cached — no per-webhook SQL after compile)
         try {
-            $moduleSettings = array_merge($moduleSettings, $this->dbRuleOverrides->forBot($botId));
+            $moduleSettings = \BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::mergeInto(
+                $moduleSettings,
+                $this->dbRuleOverrides->forBot($botId),
+            );
         } catch (Throwable $e) {
             $this->logger?->warning('antispam: db rule overrides unavailable', [
                 'exception' => $e::class,
@@ -230,6 +235,16 @@ final readonly class AntispamPipeline
         }
 
         $this->executor->execute($violation, $botConfig);
+
+        // CAPTCHA soft-threshold trigger: warn verdict + captcha enabled → challenge
+        if ($outcome->verdict->action->value === 'warn') {
+            $this->captcha?->challengeUser(
+                $botConfig->botId,
+                $context->chat->chatId,
+                $context->user->userId,
+                $botConfig,
+            );
+        }
 
         try {
             $this->bumpStats($botConfig->botId, $context->chat->chatId, $detections);

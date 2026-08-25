@@ -18,8 +18,14 @@ Design source: `docs/tasks/todo.antispam.md` (RFC v5.3) in the platform repo.
 
 ## Install
 
+Dev mode (this monorepo) needs no install steps: the module is wired via root
+PSR-4 mapping, a path repository entry, and its provider in
+`bootstrap/providers.php`.
+
+Prod mode (servers without `misc/`):
+
 ```bash
-composer require bagart/telegram-bot-antispam-module
+cmd/deps/install --mode=prod   # resolves bagart/telegram-bot-antispam-module from VCS sources
 ```
 
 Register the provider in `bootstrap/providers.php`:
@@ -44,9 +50,11 @@ src/
 ├── Violation/                  # idempotent violation persistence
 ├── Strike/                     # DB-serialized strikes, escalation with hysteresis
 ├── Enforcement/                # async action executor over TgSenderContract
+├── Appeals/                    # /appeal filing (eligibility + duplicate gates)
+├── Moderation/                 # appeal decisions (approve lifts sanctions, overturns violation)
 ├── UserList/                   # whitelist/blacklist gating (bypass module vs enforcement)
 ├── DryRun/, Replay/            # breakdown without side effects; old vs new policy comparison
-└── Processors/                 # message processor + /antispam and /report commands
+└── Processors/                 # message processor + /antispam, /report and /appeal commands
 
 config/antispam.php            # module config (merged by the service provider)
 database/migrations/           # antispam tables (loaded via loadMigrationsFrom)

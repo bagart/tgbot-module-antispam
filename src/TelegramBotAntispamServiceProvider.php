@@ -92,6 +92,23 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
 
         $this->app->singleton(\BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::class);
 
+        $this->app->singleton(\BAGArt\TelegramBotAntispam\Appeals\AppealManager::class);
+
+        $this->app->singleton(\BAGArt\TelegramBotAntispam\Captcha\CaptchaStore::class, fn ($app) => new \BAGArt\TelegramBotAntispam\Captcha\CaptchaStore(
+            cache: $app->make(ASKCacheWrapper::class),
+        ));
+
+        $this->app->singleton(\BAGArt\TelegramBotAntispam\Captcha\CaptchaService::class, fn ($app) => new \BAGArt\TelegramBotAntispam\Captcha\CaptchaService(
+            store: $app->make(\BAGArt\TelegramBotAntispam\Captcha\CaptchaStore::class),
+            lists: $app->make(UserListManager::class),
+            sender: $app->make(\BAGArt\TelegramBot\Contracts\Outbound\TgSenderContract::class),
+            settings: $app->make(ModuleSettingsContract::class),
+            logger: $app->make(ASKLogWrapper::class),
+            excludeUserIds: array_map('intval', (array) Config::get('antispam.exclude_user_ids', [])),
+        ));
+
+        $this->app->singleton(\BAGArt\TelegramBotAntispam\Moderation\AntispamModerationService::class);
+
         $this->app->singleton(\BAGArt\TelegramBotAntispam\DryRun\DryRunExecutor::class);
 
         $this->app->singleton(\BAGArt\TelegramBotAntispam\Replay\ReplayEvaluator::class);
@@ -115,6 +132,7 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
                 settings: $app->make(ModuleSettingsContract::class),
                 logger: $app->make(ASKLogWrapper::class),
                 dbRuleOverrides: $app->make(\BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::class),
+                captcha: $app->make(\BAGArt\TelegramBotAntispam\Captcha\CaptchaService::class),
                 excludeUserIds: array_map('intval', (array) Config::get('antispam.exclude_user_ids', [])),
             );
         });
@@ -123,6 +141,7 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
     }
 
     private function makeRedisCounter(): RedisBatchCounter

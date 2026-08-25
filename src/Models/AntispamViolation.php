@@ -38,6 +38,14 @@ final class AntispamViolation extends Model
 
     final public const STATUS_ESCALATED = 'escalated';
 
+    /** @var list<string> */
+    final public const STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_APPLIED,
+        self::STATUS_OVERTURNED,
+        self::STATUS_ESCALATED,
+    ];
+
     protected $table = 'antispam_violations';
 
     protected $fillable = [

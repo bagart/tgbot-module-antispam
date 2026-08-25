@@ -62,6 +62,31 @@ final readonly class UserListManager
         }
     }
 
+    /**
+     * Creates/refreshes a whitelist entry (used by the CAPTCHA pass flow).
+     * Throws on storage failure — callers decide the failure policy.
+     */
+    public function addWhitelistEntry(
+        string $botId,
+        int $chatId,
+        int $userId,
+        string $reason,
+        ?\DateTimeInterface $expiresAt,
+    ): void {
+        AntispamUserListEntry::query()->updateOrCreate([
+            'bot_id' => $botId,
+            'chat_id' => $chatId,
+            'user_id' => $userId,
+            'list_type' => 'whitelist',
+        ], [
+            'reason' => $reason,
+            'expires_at' => $expiresAt,
+            'created_by' => 'antispam:captcha',
+        ]);
+
+        $this->refresh($botId, $chatId);
+    }
+
     public function refresh(string $botId, int $chatId): void
     {
         foreach (['whitelist', 'blacklist'] as $listType) {

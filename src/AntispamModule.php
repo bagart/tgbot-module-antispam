@@ -8,10 +8,15 @@ use BAGArt\TelegramBot\Modules\TgModuleCapability;
 use BAGArt\TelegramBot\Modules\TgModuleContract;
 use BAGArt\TelegramBot\Modules\TgModuleDescriptor;
 use BAGArt\TelegramBot\Modules\TgModuleRegistrar;
+use BAGArt\TelegramBot\TgApi\Types\DTO\CallbackQueryTypeDTO;
+use BAGArt\TelegramBot\TgApi\Types\DTO\ChatMemberUpdatedTypeDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\MessageTypeDTO;
 use BAGArt\TelegramBotAntispam\Processors\AntispamMessageProcessor;
 use BAGArt\TelegramBotAntispam\Processors\AntispamReportCommand;
 use BAGArt\TelegramBotAntispam\Processors\AntispamStatusCommand;
+use BAGArt\TelegramBotAntispam\Processors\AppealCommand;
+use BAGArt\TelegramBotAntispam\Processors\CaptchaCallbackProcessor;
+use BAGArt\TelegramBotAntispam\Processors\CaptchaJoinProcessor;
 
 /**
  * Anti-spam platform module.
@@ -43,7 +48,10 @@ final class AntispamModule implements TgModuleContract
     {
         $registrar
             ->processor(MessageTypeDTO::class, AntispamMessageProcessor::class)
+            ->processor(ChatMemberUpdatedTypeDTO::class, CaptchaJoinProcessor::class)
+            ->processor(CallbackQueryTypeDTO::class, CaptchaCallbackProcessor::class)
             ->command(AntispamStatusCommand::NAME, AntispamStatusCommand::class)
-            ->command(AntispamReportCommand::NAME, AntispamReportCommand::class);
+            ->command(AntispamReportCommand::NAME, AntispamReportCommand::class)
+            ->command(AppealCommand::NAME, AppealCommand::class);
     }
 }
