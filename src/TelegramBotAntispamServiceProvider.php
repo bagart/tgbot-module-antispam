@@ -40,6 +40,14 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
             [AntispamModule::class],
         ))));
 
+        // Default seed data (config/telegram.php contract): the host
+        // DatabaseSeeder consumes this list without knowing the module.
+        $seeders = (array) Config::get('telegram.modules_seeders', []);
+        Config::set('telegram.modules_seeders', array_values(array_unique(array_merge(
+            $seeders,
+            [Database\Seeders\AntispamDefaultsSeeder::class],
+        ))));
+
         $this->app->singleton(Counter::class, fn ($app): Counter => (string) Config::get('antispam.counter_driver') === 'memory'
             ? $this->makeMemoryCounter()
             : $this->makeRedisCounter());
@@ -49,6 +57,7 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
 
         $this->app->singleton(RuleEngine::class, fn ($app): RuleEngine => new RuleEngine(
             iterator_to_array($app->make(RuleRegistry::class)),
+            self::detectionSources($app),
         ));
         $this->app->singleton(VerdictAggregator::class);
         $this->app->singleton(PolicyEvaluator::class);
@@ -84,13 +93,17 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
         $this->app->singleton(ActionExecutor::class, fn ($app): ActionExecutor => new ActionExecutor(
             sender: $app->make(\BAGArt\TelegramBot\Contracts\Outbound\TgSenderContract::class),
             recorder: $app->make(ViolationRecorder::class),
+            logger: $app->make(ASKLogWrapper::class),
         ));
 
         $this->app->singleton(RuleCooldown::class, fn ($app): RuleCooldown => new RuleCooldown(
             cache: $app->make(ASKCacheWrapper::class),
         ));
 
-        $this->app->singleton(\BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::class);
+        $this->app->singleton(\BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::class, fn ($app) => new \BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides(
+            cache: $app->make(ASKCacheWrapper::class),
+            ttlSeconds: (int) Config::get('antispam.cache_ttl_seconds', 300),
+        ));
 
         $this->app->singleton(\BAGArt\TelegramBotAntispam\Appeals\AppealManager::class);
 
@@ -133,6 +146,9 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
                 logger: $app->make(ASKLogWrapper::class),
                 dbRuleOverrides: $app->make(\BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::class),
                 captcha: $app->make(\BAGArt\TelegramBotAntispam\Captcha\CaptchaService::class),
+                enablement: $app->bound(\BAGArt\TelegramBot\Contracts\Modules\ModuleEnablementContract::class)
+                    ? $app->make(\BAGArt\TelegramBot\Contracts\Modules\ModuleEnablementContract::class)
+                    : null,
                 excludeUserIds: array_map('intval', (array) Config::get('antispam.exclude_user_ids', [])),
             );
         });
@@ -140,6 +156,11 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->commands([
+            \BAGArt\TelegramBotAntispam\Commands\BlocklistSyncCommand::class,
+            \BAGArt\TelegramBotAntispam\Commands\ValidateDatasetCommand::class,
+        ]);
+
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
     }
@@ -161,5 +182,26 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
             fingerprintCap: (int) Config::get('antispam.redis.fingerprint_cap', 1000),
             fingerprintWindow: (int) Config::get('antispam.redis.fingerprint_window', 300),
         );
+    }
+
+    /**
+     * Detection sources beyond built-in rules. The honeypot is always on
+     * (settings-driven); the AI classifier registers only when enabled —
+     * the core engine stays AI-free.
+     *
+     * @return list<\BAGArt\TelegramBotAntispam\Rules\DetectionSource>
+     */
+    private static function detectionSources($app): array
+    {
+        $sources = [new \BAGArt\TelegramBotAntispam\Risk\HoneypotDetector()];
+
+        if ((bool) Config::get('antispam.ai.enabled', false)) {
+            $sources[] = new \BAGArt\TelegramBotAntispam\Ai\AiSpamDetector(
+                cache: $app->make(ASKCacheWrapper::class),
+                logger: $app->make(ASKLogWrapper::class),
+            );
+        }
+
+        return $sources;
     }
 }
