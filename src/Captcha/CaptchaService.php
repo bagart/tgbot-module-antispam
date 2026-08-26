@@ -50,12 +50,19 @@ final readonly class CaptchaService
 
     public function handleJoin(ChatMemberUpdatedTypeDTO $dto, TgBotConfig $botConfig): void
     {
-        $member = $dto->newChatMember;
-        $isBot = isset($member->user) && $member->user->isBot === true;
-        // The lib does not implement the ChatMember* oneOf contract yet
-        // (DtoGenerator TODO): hydrated members can be property-less
-        // placeholders. Missing facts → skip silently instead of crashing.
-        if (! isset($member->user) || $isBot) {
+        // Membership semantics: old left/kicked + new member/restricted = join.
+        // Leaves, bans and promotions must not trigger a challenge.
+        $oldStatus = $dto->oldChatMember->status;
+        $newStatus = $dto->newChatMember->status;
+        if (
+            ! in_array($oldStatus, ['left', 'kicked'], true)
+            || ! in_array($newStatus, ['member', 'restricted'], true)
+        ) {
+            return;
+        }
+
+        $user = $dto->newChatMember->user;
+        if ($user === null || $user->isBot === true) {
             return;
         }
 
@@ -63,10 +70,10 @@ final readonly class CaptchaService
             $this->challenge(
                 $botConfig,
                 (int) $dto->chat->id,
-                (int) $member->user->id,
+                (int) $user->id,
             );
         } catch (Throwable $e) {
-            $this->logFailure('join', $botConfig->botId, (int) $dto->chat->id, (int) $member->user->id, $e);
+            $this->logFailure('join', $botConfig->botId, (int) $dto->chat->id, (int) $user->id, $e);
         }
     }
 

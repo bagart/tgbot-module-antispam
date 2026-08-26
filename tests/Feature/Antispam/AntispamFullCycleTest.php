@@ -12,7 +12,7 @@ beforeEach(function () {
     config(['antispam.counter_driver' => 'memory']);
 
     \BAGArt\TelegramBotManagement\Models\TgBot::create(['bot_id' => 'test_bot', 'token' => 't:token']);
-    TgModuleEnablement::factory()->forChat('test_bot', 100)->enabled(true)->create();
+    TgModuleEnablement::factory()->forChat('test_bot', 100)->enabled(true)->create(['module_id' => 'antispam']);
 });
 
 it('runs the full cycle: violation в†’ strike в†’ async enforcement', function () {

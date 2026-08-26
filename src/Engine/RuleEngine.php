@@ -9,16 +9,24 @@ use BAGArt\TelegramBotAntispam\Domain\AntispamMessageContext;
 use BAGArt\TelegramBotAntispam\Domain\EvaluationPlan;
 use BAGArt\TelegramBotAntispam\Domain\RuleRequirements;
 use BAGArt\TelegramBotAntispam\Rules\AntiSpamRule;
+use BAGArt\TelegramBotAntispam\Rules\DetectionSource;
 
 /**
  * Pure evaluation: (context, plan) → Detection[]. No DB/Redis/Telegram calls.
  * Determinism invariant: same input + same plan = same detections.
+ *
+ * DetectionSources (honeypot, future reputation/AI) run through the same
+ * path as built-in rules and share the aggregator's group caps.
  */
 final readonly class RuleEngine
 {
-    /** @param  list<AntiSpamRule>  $rules */
+    /**
+     * @param  list<AntiSpamRule>  $rules
+     * @param  list<DetectionSource>  $sources
+     */
     public function __construct(
         private array $rules,
+        private array $sources = [],
     ) {
     }
 
@@ -27,7 +35,7 @@ final readonly class RuleEngine
     {
         $detections = [];
         foreach ($this->rules as $rule) {
-            if (! $this->enabledFor($rule, $plan)) {
+            if (! $this->enabledFor($rule->id(), $plan)) {
                 continue;
             }
             if (! $this->applicable($rule->requirements(), $context)) {
@@ -40,12 +48,26 @@ final readonly class RuleEngine
             }
         }
 
+        foreach ($this->sources as $source) {
+            if (! $this->enabledFor($source->id(), $plan)) {
+                continue;
+            }
+            if (! $this->applicable($source->requirements(), $context)) {
+                continue;
+            }
+
+            $detection = $source->check($context);
+            if ($detection !== null) {
+                $detections[] = $detection;
+            }
+        }
+
         return $detections;
     }
 
-    private function enabledFor(AntispamRule $rule, EvaluationPlan $plan): bool
+    private function enabledFor(string $id, EvaluationPlan $plan): bool
     {
-        return $plan->isEnabled($rule->id());
+        return $plan->isEnabled($id);
     }
 
     /**

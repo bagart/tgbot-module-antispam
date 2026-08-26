@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use BAGArt\TelegramBotAntispam\Http\Controllers\AntispamAnalyticsController;
 use BAGArt\TelegramBotAntispam\Http\Controllers\AntispamAppealsController;
 use BAGArt\TelegramBotAntispam\Http\Controllers\AntispamChatsController;
 use BAGArt\TelegramBotAntispam\Http\Controllers\AntispamDashboardController;
@@ -21,6 +22,7 @@ Route::middleware(['web', 'auth', 'verified'])
     ->name('antispam.')
     ->group(function (): void {
         Route::get('dashboard', [AntispamDashboardController::class, 'index'])->name('dashboard');
+        Route::get('analytics', [AntispamAnalyticsController::class, 'index'])->name('analytics');
         Route::get('rules', [AntispamRulesController::class, 'index'])->name('rules.index');
         Route::post('rules', [AntispamRulesController::class, 'store'])->name('rules.store');
         Route::patch('rules/{rule}', [AntispamRulesController::class, 'update'])->name('rules.update');
@@ -37,6 +39,7 @@ Route::middleware(['web', 'auth', 'verified'])
         Route::post('dry-run', [AntispamDryRunController::class, 'run'])->name('dry-run');
         Route::get('user-lists', [AntispamUserListsController::class, 'index'])->name('user-lists.index');
         Route::post('user-lists', [AntispamUserListsController::class, 'store'])->name('user-lists.store');
+        Route::post('user-lists/blocklist-sync', [AntispamUserListsController::class, 'toggleBlocklistSync'])->name('user-lists.toggleBlocklistSync');
         Route::delete('user-lists/{entry}', [AntispamUserListsController::class, 'destroy'])->name('user-lists.destroy');
         Route::get('stats', [AntispamStatsController::class, 'index'])->name('stats.index');
         Route::get('stats/export', [AntispamStatsController::class, 'export'])->name('stats.export');

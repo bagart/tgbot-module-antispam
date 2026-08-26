@@ -70,6 +70,7 @@ class AntispamChatsController
             'captcha_on_fail' => ['nullable', Rule::in(['ban', 'kick'])],
             'captcha_ttl_seconds' => ['nullable', 'integer', 'min:30', 'max:3600'],
             'captcha_whitelist_seconds' => ['nullable', 'integer', 'min:60', 'max:86400'],
+            'honeypot_words' => ['nullable', 'string', 'max:2000'],
         ]);
 
         if (($validated['custom_rules'] ?? null) === []) {
@@ -141,6 +142,15 @@ class AntispamChatsController
             }
         }
 
+        // Honeypot (P3.8): comma-separated trigger words; empty string removes the key
+        if (array_key_exists('honeypot_words', $validated)) {
+            $words = array_values(array_filter(array_map(
+                fn (string $word): string => trim($word),
+                explode(',', (string) $validated['honeypot_words']),
+            )));
+            $patch['honeypot'] = $words === [] ? null : ['words' => $words];
+        }
+
         return $patch;
     }
 
@@ -182,6 +192,9 @@ class AntispamChatsController
             'customRules' => isset($settings['disabled_rules'])
                 ? array_values(array_diff($this->knownRuleIds(), array_keys((array) $settings['disabled_rules'])))
                 : null,
+            'honeypotWords' => isset($settings['honeypot']['words'])
+                ? implode(', ', (array) $settings['honeypot']['words'])
+                : '',
             'captcha' => isset($settings['captcha']) && is_array($settings['captcha'])
                 ? [
                     'enabled' => (bool) ($settings['captcha']['enabled'] ?? false),

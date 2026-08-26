@@ -25,6 +25,7 @@ final readonly class MessageData
         public bool $isForwarded,
         public bool $isReply,
         public int $length,
+        public ?int $mediaDurationSeconds = null, // voice/video_note/audio/video duration
     ) {
     }
 

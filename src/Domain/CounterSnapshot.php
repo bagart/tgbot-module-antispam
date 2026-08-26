@@ -13,6 +13,7 @@ final readonly class CounterSnapshot
     /**
      * @param  array<string, int>  $fingerprints  fingerprint → occurrences in window
      * @param  list<string>  $recentFingerprints  fingerprints of recent messages (bounded)
+     * @param  array<string, int>  $crossChatMedia  media fingerprint → distinct chats seen (bot-wide)
      */
     public function __construct(
         public int $messages5s = 0,
@@ -21,12 +22,14 @@ final readonly class CounterSnapshot
         public int $messages1h = 0,
         public int $forwards30s = 0,
         public int $media30s = 0,
+        public int $voices30s = 0,
         public int $links1m = 0,
         public int $mentions1m = 0,
         public int $stickers1m = 0,
         public int $activityTotal5m = 0,
         public array $fingerprints = [],
         public array $recentFingerprints = [],
+        public array $crossChatMedia = [],
     ) {
     }
 
@@ -39,12 +42,14 @@ final readonly class CounterSnapshot
             messages1h: $this->messages1h,
             forwards30s: $this->forwards30s,
             media30s: $this->media30s,
+            voices30s: $this->voices30s,
             links1m: $this->links1m,
             mentions1m: $this->mentions1m,
             stickers1m: $this->stickers1m,
             activityTotal5m: $this->activityTotal5m,
             fingerprints: $this->fingerprints,
             recentFingerprints: $this->recentFingerprints,
+            crossChatMedia: $this->crossChatMedia,
         );
     }
 }

@@ -22,6 +22,9 @@ final class MemoryBatchCounter implements Counter
     /** @var array<string, array<int, string>> scope:bucket → hashes */
     private array $fingerprintSets = [];
 
+    /** @var array<string, array<int, int>> bot:fingerprint → chatId → last timestamp */
+    private array $crossChat = [];
+
     public function __construct(
         private readonly int $graceSeconds = 10,
         private readonly int $fingerprintCap = 1000,
@@ -78,13 +81,36 @@ final class MemoryBatchCounter implements Counter
             messages1h: $counts['messages:3600'] ?? 0,
             forwards30s: $counts['forwards:30'] ?? 0,
             media30s: $counts['media:30'] ?? 0,
+            voices30s: $counts['voices:30'] ?? 0,
             links1m: $counts['links:60'] ?? 0,
             mentions1m: $counts['mentions:60'] ?? 0,
             stickers1m: $counts['stickers:60'] ?? 0,
             activityTotal5m: $messages5m + ($counts['forwards:300'] ?? 0) + ($counts['media:300'] ?? 0) + ($counts['stickers:300'] ?? 0),
             fingerprints: $recorded,
             recentFingerprints: array_keys($recorded),
+            crossChatMedia: $this->recordCrossChat($batch, $now),
         );
+    }
+
+    /** @return array<string, int> fingerprint → distinct chats seen within the window */
+    private function recordCrossChat(CounterBatch $batch, int $now): array
+    {
+        $out = [];
+        foreach ($batch->crossChatFingerprints as $fp) {
+            $key = $batch->botId.':'.$fp;
+            $chats = &$this->crossChat[$key];
+            $chats ??= [];
+            $chats[$batch->chatId] = $now;
+            // prune stale chat entries (bounded by distinct-chat cardinality cap)
+            if (count($chats) > $this->fingerprintCap) {
+                $chats = array_slice($chats, -$this->fingerprintCap, null, true);
+            }
+            unset($chats);
+            $active = array_filter($this->crossChat[$key], fn (int $ts): bool => $ts >= $now - $this->fingerprintWindow);
+            $out[$fp] = count($active);
+        }
+
+        return $out;
     }
 
     /** @return array<string, array{int, list<int>}> */
@@ -94,6 +120,7 @@ final class MemoryBatchCounter implements Counter
             'messages' => [3600, [5, 30, 300, 3600]],
             'forwards' => [300, [30, 300]],
             'media' => [300, [30, 300]],
+            'voices' => [300, [30]],
             'links' => [60, [60]],
             'mentions' => [60, [60]],
             'stickers' => [300, [60, 300]],

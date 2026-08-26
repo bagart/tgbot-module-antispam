@@ -88,3 +88,55 @@ it('clearing custom rules restores inheritance (all active)', function () {
 
     expect(collect($report['matchedRules'])->pluck('ruleId'))->toContain('advertising.regex');
 });
+
+it('saves captcha settings as a module_settings map', function () {
+    $this->put(route('antispam.chats.updateSettings', ['botId' => 'admin_bot', 'chatId' => 100]), [
+        'captcha_enabled' => true,
+        'captcha_on_fail' => 'kick',
+        'captcha_ttl_seconds' => 120,
+        'captcha_whitelist_seconds' => 600,
+    ])->assertRedirect();
+
+    $settings = TgModuleEnablement::query()
+        ->where('module_id', 'antispam')
+        ->where('bot_id', 'admin_bot')
+        ->where('chat_id', 100)
+        ->value('module_settings');
+
+    expect($settings['captcha'])->toBe([
+        'enabled' => true,
+        'on_fail' => 'kick',
+        'ttl_seconds' => 120,
+        'whitelist_seconds' => 600,
+    ]);
+});
+
+it('rejects invalid captcha parameters', function () {
+    $this->put(route('antispam.chats.updateSettings', ['botId' => 'admin_bot', 'chatId' => 100]), [
+        'captcha_enabled' => true,
+        'captcha_on_fail' => 'nuke',
+    ])->assertSessionHasErrors('captcha_on_fail');
+
+    $this->put(route('antispam.chats.updateSettings', ['botId' => 'admin_bot', 'chatId' => 100]), [
+        'captcha_enabled' => true,
+        'captcha_ttl_seconds' => 5,
+    ])->assertSessionHasErrors('captcha_ttl_seconds');
+});
+
+it('clearing captcha removes the settings key (inherit = off)', function () {
+    $this->put(route('antispam.chats.updateSettings', ['botId' => 'admin_bot', 'chatId' => 100]), [
+        'captcha_enabled' => true,
+    ])->assertRedirect();
+
+    $this->put(route('antispam.chats.updateSettings', ['botId' => 'admin_bot', 'chatId' => 100]), [
+        'captcha_enabled' => false,
+    ])->assertRedirect();
+
+    $settings = TgModuleEnablement::query()
+        ->where('module_id', 'antispam')
+        ->where('bot_id', 'admin_bot')
+        ->where('chat_id', 100)
+        ->value('module_settings');
+
+    expect($settings)->not->toHaveKey('captcha');
+});

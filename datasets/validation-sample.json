@@ -1,0 +1,12 @@
+[
+    {"text": "hello everyone, nice weather today", "expected": "allow"},
+    {"text": "can someone explain the homework?", "expected": "allow"},
+    {"text": "thanks, that fixed it for me too", "expected": "allow"},
+    {"text": "meeting starts in ten minutes", "expected": "allow"},
+    {"text": "does anyone have the link to the docs?", "expected": "allow"},
+    {"text": "join t.me/spam_channel now", "expected": "restrict"},
+    {"text": "buy followers at bit.ly/cheap4u", "expected": "restrict"},
+    {"text": "казино онлайн, быстрые выплаты!", "expected": "restrict"},
+    {"text": "$500 per day for simple work!!!", "expected": "restrict"},
+    {"text": "заработок на криптовалюте без вложений, пиши в лс", "expected": "restrict"}
+]

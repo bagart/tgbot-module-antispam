@@ -2,18 +2,20 @@
 
 declare(strict_types=1);
 
+use BAGArt\AsyncKernel\Wrappers\ASKLogWrapper;
 use BAGArt\TelegramBot\Configs\TgBotConfig;
 use BAGArt\TelegramBot\Contracts\Outbound\TgSenderContract;
 use BAGArt\TelegramBot\Processing\RegisteredUpdateProcessorSelector;
 use BAGArt\TelegramBot\Configs\TgServiceConfig;
-use BAGArt\TelegramBot\TgApi\Types\DTO\BanChatMemberMethodDTO;
+use BAGArt\TelegramBot\TgApi\Methods\DTO\BanChatMemberMethodDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\CallbackQueryTypeDTO;
-use BAGArt\TelegramBot\TgApi\Types\DTO\ChatMemberTypeDTO;
+use BAGArt\TelegramBot\TgApi\Types\DTO\ChatMemberLeftTypeDTO;
+use BAGArt\TelegramBot\TgApi\Types\DTO\ChatMemberMemberTypeDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\ChatMemberUpdatedTypeDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\ChatTypeDTO;
-use BAGArt\TelegramBot\TgApi\Types\DTO\RestrictChatMemberMethodDTO;
-use BAGArt\TelegramBot\TgApi\Types\DTO\SendMessageMethodDTO;
-use BAGArt\TelegramBot\TgApi\Types\DTO\UnbanChatMemberMethodDTO;
+use BAGArt\TelegramBot\TgApi\Methods\DTO\RestrictChatMemberMethodDTO;
+use BAGArt\TelegramBot\TgApi\Methods\DTO\SendMessageMethodDTO;
+use BAGArt\TelegramBot\TgApi\Methods\DTO\UnbanChatMemberMethodDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\UserTypeDTO;
 use BAGArt\TelegramBot\TgApi\Types\Enum\ChatPropTypeEnum;
 use BAGArt\TelegramBotAntispam\Captcha\CaptchaService;
@@ -42,46 +44,33 @@ function captchaSettingsRow(string $botId = 'test_bot', int $chatId = 100, array
         ->create(['module_id' => 'antispam', 'module_settings' => $settings]);
 }
 
-/**
- * The lib does not implement the ChatMember* oneOf contract yet: hydrated
- * members are property-less ChatMemberTypeDTO placeholders. This subclass
- * simulates the facts a future oneOf-aware mapper will provide.
- */
-final class CaptchaTestMemberDTO extends ChatMemberTypeDTO
-{
-    public function __construct(
-        public readonly UserTypeDTO $user,
-        public readonly string $status,
-    ) {
-        parent::__construct();
-    }
-}
-
 function joinEvent(int $chatId, int $userId, bool $isBot = false): ChatMemberUpdatedTypeDTO
 {
     return new ChatMemberUpdatedTypeDTO(
         chat: new ChatTypeDTO(id: (string) $chatId, type: ChatPropTypeEnum::SUPERGROUP),
         from: new UserTypeDTO(id: (string) $userId, isBot: false, firstName: 'Joiner'),
         date: time(),
-        oldChatMember: new CaptchaTestMemberDTO(
+        oldChatMember: new ChatMemberLeftTypeDTO(
             user: new UserTypeDTO(id: (string) $userId, isBot: $isBot, firstName: 'Joiner'),
-            status: 'left',
         ),
-        newChatMember: new CaptchaTestMemberDTO(
+        newChatMember: new ChatMemberMemberTypeDTO(
             user: new UserTypeDTO(id: (string) $userId, isBot: $isBot, firstName: 'Joiner'),
-            status: 'member',
         ),
     );
 }
 
-function joinEventWithPlaceholderMembers(int $chatId, int $userId): ChatMemberUpdatedTypeDTO
+function leaveEvent(int $chatId, int $userId): ChatMemberUpdatedTypeDTO
 {
     return new ChatMemberUpdatedTypeDTO(
         chat: new ChatTypeDTO(id: (string) $chatId, type: ChatPropTypeEnum::SUPERGROUP),
-        from: new UserTypeDTO(id: (string) $userId, isBot: false, firstName: 'Joiner'),
+        from: new UserTypeDTO(id: (string) $userId, isBot: false, firstName: 'Leaver'),
         date: time(),
-        oldChatMember: new ChatMemberTypeDTO(),
-        newChatMember: new ChatMemberTypeDTO(),
+        oldChatMember: new ChatMemberMemberTypeDTO(
+            user: new UserTypeDTO(id: (string) $userId, isBot: false, firstName: 'Leaver'),
+        ),
+        newChatMember: new ChatMemberLeftTypeDTO(
+            user: new UserTypeDTO(id: (string) $userId, isBot: false, firstName: 'Leaver'),
+        ),
     );
 }
 
@@ -98,6 +87,26 @@ function callbackEvent(int $fromUserId, string $data): CallbackQueryTypeDTO
 function captchaService(TgSenderContract $spy): CaptchaService
 {
     app()->instance(TgSenderContract::class, $spy);
+    app()->instance(ASKLogWrapper::class, new ASKLogWrapper(new class () implements \Psr\Log\LoggerInterface
+    {
+        public function emergency(string|Stringable $m, array $c = []): void { $this->log('emergency', $m, $c); }
+
+        public function alert(string|Stringable $m, array $c = []): void { $this->log('alert', $m, $c); }
+
+        public function critical(string|Stringable $m, array $c = []): void { $this->log('critical', $m, $c); }
+
+        public function error(string|Stringable $m, array $c = []): void { $this->log('error', $m, $c); }
+
+        public function warning(string|Stringable $m, array $c = []): void { $this->log('warning', $m, $c); }
+
+        public function notice(string|Stringable $m, array $c = []): void { $this->log('notice', $m, $c); }
+
+        public function info(string|Stringable $m, array $c = []): void { $this->log('info', $m, $c); }
+
+        public function debug(string|Stringable $m, array $c = []): void { $this->log('debug', $m, $c); }
+
+        public function log($level, string|Stringable $m, array $c = []): void { fwrite(STDERR, "CAPTCHA-LOG[$level]: $m ".json_encode($c)."\n"); }
+    }));
 
     return app(CaptchaService::class);
 }
@@ -118,7 +127,8 @@ it('routes join events and captcha callbacks through the selector', function () 
     $botConfig = new TgBotConfig(token: 'x:token', botId: 'test_bot');
 
     $joinFound = [];
-    foreach ($selector->selectProcessors(joinEvent(100, 42), $botConfig) as $processors) {
+    $update = new \BAGArt\TelegramBot\TgApi\Types\DTO\UpdateTypeDTO(updateId: 1, chatMember: joinEvent(100, 42));
+    foreach ($selector->selectProcessors($update, $botConfig) as $processors) {
         foreach ($processors as $processor) {
             $joinFound[] = $processor::class;
         }
@@ -169,13 +179,13 @@ it('ignores bots and whitelisted users', function () {
     expect($spy->sent)->toBe([]);
 });
 
-it('degrades to a no-op when member facts are unavailable (lib oneOf gap)', function () {
+it('does not challenge on leave events (member → left)', function () {
     captchaSettingsRow();
     $spy = senderSpy();
     $service = captchaService($spy);
     $botConfig = new TgBotConfig(token: 'x:token', botId: 'test_bot');
 
-    $service->handleJoin(joinEventWithPlaceholderMembers(100, 42), $botConfig);
+    $service->handleJoin(leaveEvent(100, 42), $botConfig);
 
     expect($spy->sent)->toBe([]);
 });
@@ -192,6 +202,7 @@ it('lifts the restriction and whitelists on a correct answer', function () {
     expect($data)->toEndWith(':ok');
 
     $spy->sent = [];
+    $spy->dtos = [];
     $service->handleCallback(callbackEvent(42, $data), $botConfig);
 
     expect($spy->sent)->toContain(RestrictChatMemberMethodDTO::class)
@@ -287,4 +298,31 @@ it('decodes callback payloads strictly', function () {
         ->and(CaptchaService::decode('other:prefix:1'))->toBeNull()
         ->and(CaptchaService::decode('antispam:captcha:x:42:tok:ok'))->toBeNull()
         ->and(CaptchaService::decode('antispam:captcha:100:42:tok'))->toBeNull();
+});
+
+it('challenges a user through the pipeline when a warn verdict lands', function () {
+    TgModuleEnablement::factory()->forChat('test_bot', 100)->enabled(true)->create([
+        'module_id' => 'antispam',
+        'module_settings' => [
+            // Oversized-message rule scores 20 (soft/info) → warn band only
+            'thresholds' => ['warn' => 20, 'restrict' => 400, 'ban' => 900],
+            'captcha' => ['enabled' => true, 'on_fail' => 'ban', 'ttl_seconds' => 300, 'whitelist_seconds' => 3600],
+        ],
+    ]);
+
+    $spy = senderSpy();
+    $pipeline = pipelineWith($spy);
+    $botConfig = new TgBotConfig(token: 'x:token', botId: 'test_bot');
+
+    $outcome = $pipeline->handle(antispamMessage(100, 42, str_repeat('x', 4200)), $botConfig);
+
+    expect($outcome?->verdict->action->value)->toBe('warn')
+        ->and($spy->sent)->toContain(RestrictChatMemberMethodDTO::class);
+
+    $challenges = array_values(array_filter(
+        $spy->dtos,
+        fn ($dto) => $dto instanceof SendMessageMethodDTO && $dto->replyMarkup !== null,
+    ));
+    expect(count($challenges))->toBe(1)
+        ->and($challenges[0]->replyMarkup->inlineKeyboard[0][0]->callbackData)->toStartWith('antispam:captcha:100:42:');
 });

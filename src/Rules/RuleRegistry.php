@@ -38,6 +38,10 @@ final class RuleRegistry implements \IteratorAggregate
             new Behavior\StickerEmojiFloodRule(),
             new Behavior\MediaFloodRule(),
             new Behavior\ActivityFloodRule(),
+            new Behavior\VoiceDurationFloodRule(),
+            new Behavior\AnimatedEmojiFloodRule(),
+            new Behavior\CrossChatMediaRule(),
+            new Media\CaptionAdvertisingRule(),
         ];
     }
 

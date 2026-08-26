@@ -20,10 +20,45 @@ return [
     'risk_cache_ttl_seconds' => 60,
 
     /*
+    | Stage instrumentation (final-phase validation): when true, the pipeline
+    | logs debug entries "antispam.stage" with observe/detect/violation stage
+    | durations in ms — the source for the perf budgets (<20ms allow p95,
+    | <30ms detection, <50ms violation).
+    */
+    'instrumentation' => env('ANTISPAM_INSTRUMENTATION', false),
+
+    /*
+    | Federated blocklist (P3.7). Bans are published to the platform feed by
+    | ActionExecutor; subscriber bots opt in via their bot-scope module
+    | settings: {"blocklist_sync": {"enabled": true}}.
+    */
+    'blocklist' => [
+        'retention_days' => 30,      // blacklist entry expiry for ingested bans
+    ],
+
+    /*
+    | Optional AI spam classifier (P3.4). The core engine stays AI-free: this
+    | source registers only when enabled=true, fails OPEN (errors/timeouts are
+    | skipped, never block the webhook) and trips a circuit breaker after
+    | repeated failures. The endpoint must be a public HTTPS host (SSRF guard).
+    */
+    'ai' => [
+        'enabled' => env('ANTISPAM_AI_ENABLED', false),
+        'endpoint' => env('ANTISPAM_AI_ENDPOINT', ''),
+        'key' => env('ANTISPAM_AI_KEY', ''),
+        'timeout_seconds' => 0.3,    // hard webhook budget
+        'min_confidence' => 0.6,
+        'score_at_full_confidence' => 60,
+        'failure_threshold' => 5,    // failures before the breaker opens
+        'breaker_cooldown_seconds' => 60,
+    ],
+
+    /*
     | User ids that bypass enforcement (admins, service accounts). Observation
     | continues — only actions are suppressed (bypass enforcement semantics).
+    | Comma-separated ids via env, e.g. ANTISPAM_EXCLUDE_USER_IDS=424242,17.
     */
-    'exclude_user_ids' => [],
+    'exclude_user_ids' => array_map('intval', array_filter(explode(',', (string) env('ANTISPAM_EXCLUDE_USER_IDS', '')))),
 
     /*
     | Default policy applied when module_settings carry no overrides:

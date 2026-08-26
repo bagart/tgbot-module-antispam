@@ -3,6 +3,7 @@
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
 use BAGArt\TelegramBotManagement\Models\TgBot;
+use BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides;
 use BAGArt\TelegramBotAntispam\Models\AntispamRuleModel;
 use BAGArt\TelegramBotAntispam\Rules\RuleRegistry;
 use Illuminate\Http\RedirectResponse;
@@ -13,6 +14,11 @@ use Inertia\Response;
 
 class AntispamRulesController
 {
+    public function __construct(
+        private readonly DbRuleOverrides $dbRuleOverrides,
+    ) {
+    }
+
     public function index(): Response
     {
         $registry = app(RuleRegistry::class);
@@ -32,6 +38,7 @@ class AntispamRulesController
         AntispamRuleModel::query()->create(
             $this->validated($request) + ['created_by' => $request->user()?->email],
         );
+        $this->dbRuleOverrides->invalidate();
 
         return to_route('antispam.rules.index');
     }
@@ -39,6 +46,7 @@ class AntispamRulesController
     public function update(Request $request, AntispamRuleModel $rule): RedirectResponse
     {
         $rule->update($this->validated($request));
+        $this->dbRuleOverrides->invalidate();
 
         return to_route('antispam.rules.index');
     }
@@ -46,6 +54,7 @@ class AntispamRulesController
     public function destroy(AntispamRuleModel $rule): RedirectResponse
     {
         $rule->delete();
+        $this->dbRuleOverrides->invalidate();
 
         return to_route('antispam.rules.index');
     }

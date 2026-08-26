@@ -48,6 +48,15 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
             [Database\Seeders\AntispamDefaultsSeeder::class],
         ))));
 
+        // Frontend pages (config/telegram.php contract): `php artisan
+        // tgapp:pages` turns this path into a Vite glob in the host's
+        // generated modules-pages file — no host-side module references.
+        $frontendPages = (array) Config::get('telegram.modules_frontend_pages', []);
+        Config::set('telegram.modules_frontend_pages', array_values(array_unique(array_merge(
+            $frontendPages,
+            [__DIR__.'/../resources/js/pages'],
+        ))));
+
         $this->app->singleton(Counter::class, fn ($app): Counter => (string) Config::get('antispam.counter_driver') === 'memory'
             ? $this->makeMemoryCounter()
             : $this->makeRedisCounter());

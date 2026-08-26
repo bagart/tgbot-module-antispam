@@ -5,6 +5,7 @@ namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 use BAGArt\TelegramBotAntispam\Models\AntispamUserListEntry;
 use BAGArt\TelegramBotAntispam\UserList\UserListManager;
 use BAGArt\TelegramBotManagement\Models\TgBot;
+use BAGArt\TelegramBotManagement\Models\TgModuleEnablement;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -27,7 +28,46 @@ class AntispamUserListsController
                 ->paginate(50)
                 ->withQueryString(),
             'bots' => TgBot::query()->orderBy('bot_id')->get(['bot_id']),
+            'blocklistSyncBots' => $this->blocklistSyncBotIds(),
         ]);
+    }
+
+    /**
+     * Federated blocklist opt-in toggle (P3.7): stores
+     * {"blocklist_sync": {"enabled": bool}} into the BOT-scope antispam
+     * enablement settings.
+     */
+    public function toggleBlocklistSync(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'bot_id' => ['required', 'string', 'max:20', Rule::exists('tg_bots', 'bot_id')],
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $row = TgModuleEnablement::query()->firstOrNew([
+            'bot_id' => $validated['bot_id'],
+            'chat_id' => null,
+            'module_id' => 'antispam',
+        ]);
+        $row->is_enabled = true;
+        $settings = (array) ($row->module_settings ?? []);
+        $settings['blocklist_sync'] = ['enabled' => $validated['enabled']];
+        $row->module_settings = $settings;
+        $row->save();
+
+        return to_route('antispam.user-lists.index');
+    }
+
+    /** @return list<string> bots with blocklist sync enabled */
+    private function blocklistSyncBotIds(): array
+    {
+        return TgModuleEnablement::query()
+            ->whereNull('chat_id')
+            ->where('module_id', 'antispam')
+            ->get(['bot_id', 'module_settings'])
+            ->filter(fn ($row): bool => (bool) (((array) $row->module_settings)['blocklist_sync']['enabled'] ?? false) === true)
+            ->pluck('bot_id')
+            ->all();
     }
 
     public function store(Request $request): RedirectResponse

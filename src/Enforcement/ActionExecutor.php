@@ -27,6 +27,7 @@ final readonly class ActionExecutor
     public function __construct(
         private TgSenderContract $sender,
         private ViolationRecorder $recorder,
+        private ?\BAGArt\AsyncKernel\Wrappers\ASKLogWrapper $logger = null,
     ) {
     }
 
@@ -57,6 +58,7 @@ final readonly class ActionExecutor
                 chatId: (string) $violation->chat_id,
                 userId: $violation->user_id,
             ));
+            $this->publishToBlocklistFeed($violation);
 
             return;
         }
@@ -67,6 +69,31 @@ final readonly class ActionExecutor
             permissions: new ChatPermissionsTypeDTO(), // all null = fully muted
             untilDate: $this->restrictUntil($violation),
         ));
+    }
+
+    /**
+     * Federated blocklist publishing (P3.7): every ban lands in the platform
+     * feed so subscriber bots can ingest it via antispam:blocklist:sync.
+     * Best-effort — a feed failure never blocks enforcement.
+     */
+    private function publishToBlocklistFeed(AntispamViolation $violation): void
+    {
+        try {
+            \BAGArt\TelegramBotAntispam\Models\AntispamBlocklistFeed::query()->updateOrCreate([
+                'source_bot_id' => $violation->bot_id,
+                'user_id' => $violation->user_id,
+            ], [
+                'reason' => implode(', ', array_column((array) $violation->matched_rules, 'ruleId')),
+                'published_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            $this->logger?->warning('antispam: blocklist feed publish failed', [
+                'botId' => $violation->bot_id,
+                'userId' => $violation->user_id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function restrictUntil(AntispamViolation $violation): ?int

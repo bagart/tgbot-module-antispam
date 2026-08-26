@@ -19,7 +19,7 @@ final class AdvertisingRule extends AntiSpamRule
     private const string ID = 'advertising.regex';
 
     /** @var list<string> */
-    private const array PATTERNS = [
+    public const array PATTERNS = [
         '/(?:t\.me|telegram\.me|bit\.ly|cutt\.ly|tinyurl|is\.gd|shorturl)\S+/iu',
         '/(?:заработок|заработать)\s+(?:на|в|с)\s+/ui',
         '/(?:инвестици\w+|криптовалют\w+|трейдинг)/ui',
@@ -45,8 +45,10 @@ final class AdvertisingRule extends AntiSpamRule
 
     public function check(AntispamMessageContext $context, EvaluationPlan $plan): ?AntiSpamDetection
     {
-        $text = $context->message->effectiveText();
-        if ($text === null) {
+        // Text bodies only — media captions are owned by
+        // advertising.media_caption (no double counting).
+        $text = $context->message->text;
+        if ($text === null || $text === '') {
             return null;
         }
 

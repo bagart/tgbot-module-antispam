@@ -46,6 +46,11 @@ final readonly class MessageNormalizer
             default => null,
         };
 
+        $mediaDurationSeconds = $dto->voice?->duration
+            ?? $dto->videoNote?->duration
+            ?? $dto->audio?->duration
+            ?? $dto->video?->duration;
+
         $message = new MessageData(
             messageId: $dto->messageId,
             date: new \DateTimeImmutable('@'.$dto->date),
@@ -60,12 +65,14 @@ final readonly class MessageNormalizer
             isForwarded: $dto->forwardOrigin !== null,
             isReply: $dto->replyToMessage !== null,
             length: mb_strlen($dto->text ?? $dto->caption ?? ''),
+            mediaDurationSeconds: $mediaDurationSeconds,
         );
 
         $user = new UserContext(
             userId: (int) $dto->from->id,
             username: $dto->from->username,
             isBot: $dto->from->isBot === true,
+            isPremium: $dto->from->isPremium,
         );
 
         $chat = new ChatContext(
@@ -83,7 +90,7 @@ final readonly class MessageNormalizer
 
     /**
      * @param  array|null  $raw  raw entity arrays from the DTO
-     * @return list<array{type: string, offset: int, length: int, url?: string}>|null
+     * @return list<array{type: string, offset: int, length: int, url?: string, custom_emoji_id?: string}>|null
      */
     private function entities(?array $raw): ?array
     {
@@ -100,6 +107,9 @@ final readonly class MessageNormalizer
             ];
             if (isset($entity['url'])) {
                 $item['url'] = (string) $entity['url'];
+            }
+            if (isset($entity['custom_emoji_id'])) {
+                $item['custom_emoji_id'] = (string) $entity['custom_emoji_id'];
             }
             $out[] = $item;
         }

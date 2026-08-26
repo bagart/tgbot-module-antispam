@@ -25,6 +25,7 @@ use BAGArt\TelegramBotAntispam\Rules\RuleCooldown;
 use BAGArt\TelegramBotAntispam\Strike\StrikeManager;
 use BAGArt\TelegramBotAntispam\UserList\UserListManager;
 use BAGArt\TelegramBotAntispam\Violation\ViolationRecorder;
+use Illuminate\Support\Facades\Config;
 use Throwable;
 
 /**
@@ -55,6 +56,7 @@ final readonly class AntispamPipeline
         private ASKLogWrapper $logger,
         private \BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides $dbRuleOverrides = new \BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides(),
         private ?CaptchaService $captcha = null,
+        private ?\BAGArt\TelegramBot\Contracts\Modules\ModuleEnablementContract $enablement = null,
         private array $excludeUserIds = [],
     ) {
     }
@@ -73,6 +75,15 @@ final readonly class AntispamPipeline
         $botId = $botConfig->botId;
         $chatId = $chat->chatId;
         $userId = $user->userId;
+
+        // Defense-in-depth enablement gate (the selector already filters
+        // module processors). Storage errors resolve inside the contract —
+        // fail-closed modules come back as disabled → clean no-op.
+        if ($this->enablement !== null && ! $this->enablement->isEnabled(self::MODULE_ID, $botId, $chatId)) {
+            return null;
+        }
+
+        $stageClock = Config::get('antispam.instrumentation', false) === true ? hrtime(true) : 0;
 
         try {
             $moduleSettings = $this->settings->settingsFor(self::MODULE_ID, $botId, $chatId);
@@ -119,15 +130,35 @@ final readonly class AntispamPipeline
             chat: $chat,
             message: $message,
             behavior: $snapshot->behaviorContext(),
+            settings: $moduleSettings,
         );
 
+        $this->logStage('observe', $stageClock);
+        $stageClock = $this->instrumentationEnabled();
+
         $plan = $this->compiler->compile($botId, $chatId, $moduleSettings);
-        $risk = $this->riskBuilder->build($botId, $chatId, $userId, $context->behavior);
+
+        // P3.8 risk signals: honeypot hit (hard), cross-bot reputation,
+        // registration attributes available from the Bot API.
+        $signals = new \BAGArt\TelegramBotAntispam\Risk\RiskSignals(
+            honeypotHit: \BAGArt\TelegramBotAntispam\Risk\HoneypotDetector::firstMatch(
+                \BAGArt\TelegramBotAntispam\Risk\HoneypotDetector::wordsOf($moduleSettings),
+                $message,
+            ) !== null,
+            reputationBans: $this->riskBuilder->reputationBans($userId),
+            hasUsername: $user->username !== null,
+            isForwarded: $message->isForwarded,
+            isPremium: $user->isPremium,
+        );
+
+        $risk = $this->riskBuilder->build($botId, $chatId, $userId, $context->behavior, signals: $signals);
         $outcome = $this->evaluator->evaluate($context, $plan, $risk);
+        $this->logStage('detect', $stageClock);
 
         if ($outcome->allows()) {
             return $outcome;
         }
+        $stageClock = $this->instrumentationEnabled();
 
         $detections = $this->filterByCooldown($outcome, $botId, $chatId, $userId, $moduleSettings);
         if ($detections === []) {
@@ -136,6 +167,7 @@ final readonly class AntispamPipeline
 
         try {
             $this->persistAndEnforce($outcome, $detections, $botConfig, $bypassEnforcement);
+            $this->logStage('violation', $stageClock);
         } catch (Throwable $e) {
             $this->logger?->error('antispam: enforcement chain failed (violation stays pending)', [
                 'botId' => $botId,
@@ -148,6 +180,24 @@ final readonly class AntispamPipeline
         }
 
         return $outcome;
+    }
+
+    private function instrumentationEnabled(): int
+    {
+        return Config::get('antispam.instrumentation', false) === true ? hrtime(true) : 0;
+    }
+
+    /** Perf-budget stage logging (final-phase validation), no-op when off. */
+    private function logStage(string $stage, int $startedAt): void
+    {
+        if ($startedAt === 0) {
+            return;
+        }
+
+        $this->logger?->debug('antispam.stage', [
+            'stage' => $stage,
+            'duration_ms' => round((hrtime(true) - $startedAt) / 1e6, 3),
+        ]);
     }
 
     /**

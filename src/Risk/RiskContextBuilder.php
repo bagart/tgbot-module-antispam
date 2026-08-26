@@ -10,14 +10,18 @@ use Psr\SimpleCache\CacheInterface;
 use Throwable;
 
 /**
- * Builds the deterministic risk level from hot signals (counters) and cold
- * aggregates (cached user_strikes row). Pure function of its inputs.
+ * Builds the deterministic risk level from hot signals (counters), cold
+ * aggregates (cached user_strikes row) and the P3.8 extra signals (honeypot
+ * hit, cross-bot reputation, registration attributes). Pure function of its
+ * inputs.
  */
 final readonly class RiskContextBuilder
 {
-    public const string VERSION = 'antispam.risk.v1';
+    public const string VERSION = 'antispam.risk.v2';
 
     private const string CACHE_PREFIX = 'antispam:risk:';
+
+    private const string REPUTATION_CACHE_PREFIX = 'antispam:reputation:';
 
     public function __construct(
         private CacheInterface $cache,
@@ -34,12 +38,14 @@ final readonly class RiskContextBuilder
         int $userId,
         BehaviorContext $behavior,
         ?array $coldAggregate = null,
+        ?RiskSignals $signals = null,
     ): RiskContext {
+        $signals ??= new RiskSignals();
         $previousViolations = $coldAggregate['total_strikes'] ?? $this->cachedViolations($botId, $chatId, $userId);
         $previousMessages = max($behavior->messages1h, $behavior->messages5m);
 
         return new RiskContext(
-            level: $this->level($previousViolations, $previousMessages),
+            level: $this->level($previousViolations, $previousMessages, $signals),
             accountAgeDays: null, // Bot API does not provide it reliably; future signal
             chatMemberAgeDays: null, // requires getChatMember — never called on the webhook path
             previousMessages: $previousMessages,
@@ -49,8 +55,13 @@ final readonly class RiskContextBuilder
     }
 
     /** Deterministic factor → level mapping (versioned). */
-    private function level(int $previousViolations, int $previousMessages): string
+    private function level(int $previousViolations, int $previousMessages, RiskSignals $signals): string
     {
+        // Honeypot is an instant hard signal: straight to HIGH.
+        if ($signals->honeypotHit) {
+            return RiskContext::LEVEL_HIGH;
+        }
+
         $score = 0;
         if ($previousViolations >= 3) {
             $score += 2;
@@ -60,6 +71,24 @@ final readonly class RiskContextBuilder
         if ($previousMessages > 20) {
             --$score;
         }
+
+        // Reputation: banned by several bots of the platform → likely relay account.
+        if ($signals->reputationBans >= 2) {
+            $score += 2;
+        } elseif ($signals->reputationBans === 1) {
+            ++$score;
+        }
+
+        // Registration attributes available from the Bot API. A missing
+        // username plus forwarding others' content is the classic
+        // "account-less forwarder" spam profile.
+        if (! $signals->hasUsername) {
+            ++$score;
+            if ($signals->isForwarded) {
+                ++$score;
+            }
+        }
+        // is_premium is tracked but deliberately not scored: too weak/noisy.
 
         return match (true) {
             $score >= 2 => RiskContext::LEVEL_HIGH,
@@ -91,6 +120,33 @@ final readonly class RiskContextBuilder
             return $value;
         } catch (Throwable) {
             // cold data unavailable — neutral default keeps evaluation pure and safe
+            return 0;
+        }
+    }
+
+    /**
+     * Cross-bot reputation (P3.7 feed as input): number of distinct bots that
+     * published a ban for this user. Cached; failures degrade to zero.
+     */
+    public function reputationBans(int $userId): int
+    {
+        $key = self::REPUTATION_CACHE_PREFIX.(string) $userId;
+
+        try {
+            $cached = $this->cache->get($key);
+            if (is_int($cached)) {
+                return $cached;
+            }
+
+            $count = \BAGArt\TelegramBotAntispam\Models\AntispamBlocklistFeed::query()
+                ->where('user_id', $userId)
+                ->distinct()
+                ->count('source_bot_id');
+
+            $this->cache->set($key, $count, max($this->ttlSeconds, 300));
+
+            return $count;
+        } catch (Throwable) {
             return 0;
         }
     }

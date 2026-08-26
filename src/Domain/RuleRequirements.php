@@ -11,7 +11,7 @@ namespace BAGArt\TelegramBotAntispam\Domain;
 final readonly class RuleRequirements
 {
     /**
-     * @param  list<string>  $counters  counter dimensions required (messages, forwards, media, links, mentions, fingerprints)
+     * @param  list<string>  $counters  counter dimensions required (messages, forwards, media, voices, links, mentions, stickers, fingerprints, cross_chat)
      */
     public function __construct(
         public bool $requiresText = false,

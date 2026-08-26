@@ -13,13 +13,9 @@ use BAGArt\TelegramBot\TgApi\Types\DTO\ChatMemberUpdatedTypeDTO;
 use BAGArt\TelegramBotAntispam\Captcha\CaptchaService;
 
 /**
- * CAPTCHA trigger for new joiners. my_chat_member updates share the DTO class
- * and are excluded via the $action discriminator.
- *
- * Status filtering (left/kicked → member/restricted) lives in
- * CaptchaService::handleJoin(): the telegram-bot-lib does not implement the
- * ChatMember* oneOf contract yet, so hydrated members can be property-less
- * placeholders — reading ->status here would emit undefined-property warnings.
+ * CAPTCHA trigger for new joiners: old status left/kicked → new status
+ * member/restricted (filtered in CaptchaService::handleJoin). my_chat_member
+ * updates share the DTO class and are excluded via the $action discriminator.
  */
 final class CaptchaJoinProcessor implements TgModuleProcessorContract
 {

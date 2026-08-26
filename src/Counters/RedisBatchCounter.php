@@ -30,6 +30,9 @@ final class RedisBatchCounter implements Counter
         local fpCap, fpWindow = tonumber(ARGV[6]), tonumber(ARGV[7])
         local dims = cjson.decode(ARGV[8])
         local fingerprints = cjson.decode(ARGV[9])
+        local botId = ARGV[10]
+        local crossChat = cjson.decode(ARGV[11])
+        local xmCap = tonumber(ARGV[12])
 
         for _, d in ipairs(dims) do
             if (d.inc or 0) > 0 then
@@ -65,6 +68,17 @@ final class RedisBatchCounter implements Counter
             end
         end
 
+        -- Cross-chat media relay: bot-wide hash chatId -> hit count per media identity
+        local chatId = ARGV[13]
+        for _, fp in ipairs(crossChat) do
+            local key = 'antispam:xm:' .. botId .. ':' .. fp
+            if redis.call('HLEN', key) < xmCap or redis.call('HEXISTS', key, chatId) == 1 then
+                redis.call('HINCRBY', key, chatId, 1)
+                redis.call('EXPIRE', key, fpWindow + grace)
+                counts['xmchats:' .. fp] = tostring(redis.call('HLEN', key))
+            end
+        end
+
         return cjson.encode({ counts = counts, recent = recent })
         LUA;
 
@@ -73,6 +87,7 @@ final class RedisBatchCounter implements Counter
         'messages' => [3600, [5, 30, 300, 3600]],
         'forwards' => [300, [30, 300]],
         'media' => [300, [30, 300]],
+        'voices' => [300, [30]],
         'links' => [60, [60]],
         'mentions' => [60, [60]],
         'stickers' => [300, [60, 300]],
@@ -83,6 +98,7 @@ final class RedisBatchCounter implements Counter
         private readonly int $graceSeconds = 10,
         private readonly int $fingerprintCap = 1000,
         private readonly int $fingerprintWindow = 300,
+        private readonly int $crossChatCap = 1000,
         /** @var callable(string): object|null test seam: resolves the connection by name */
         private readonly ?Closure $connectionResolver = null,
     ) {
@@ -115,6 +131,10 @@ final class RedisBatchCounter implements Counter
                 $this->fingerprintWindow,
                 json_encode($dims),
                 json_encode(array_values($batch->fingerprints)),
+                $batch->botId,
+                json_encode(array_values($batch->crossChatFingerprints)),
+                $this->crossChatCap,
+                (string) $batch->chatId,
             ],
             0,
         );
@@ -143,6 +163,12 @@ final class RedisBatchCounter implements Counter
         }
 
         $messages5m = $map['messages:300'] ?? 0;
+        $crossChat = [];
+        foreach ($map as $field => $value) {
+            if (str_starts_with((string) $field, 'xmchats:')) {
+                $crossChat[substr((string) $field, 8)] = $value;
+            }
+        }
 
         return new CounterSnapshot(
             messages5s: $map['messages:5'] ?? 0,
@@ -151,6 +177,7 @@ final class RedisBatchCounter implements Counter
             messages1h: $map['messages:3600'] ?? 0,
             forwards30s: $map['forwards:30'] ?? 0,
             media30s: $map['media:30'] ?? 0,
+            voices30s: $map['voices:30'] ?? 0,
             links1m: $map['links:60'] ?? 0,
             mentions1m: $map['mentions:60'] ?? 0,
             stickers1m: $map['stickers:60'] ?? 0,
@@ -160,6 +187,7 @@ final class RedisBatchCounter implements Counter
                 + ($map['stickers:300'] ?? 0),
             fingerprints: $fingerprints,
             recentFingerprints: $recent,
+            crossChatMedia: $crossChat,
         );
     }
 }

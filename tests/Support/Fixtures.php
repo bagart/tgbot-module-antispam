@@ -24,6 +24,8 @@ final class Fixtures
         ?string $text = 'hello world',
         ?BehaviorContext $behavior = null,
         array $messageOverrides = [],
+        array $userOverrides = [],
+        array $settings = [],
     ): AntispamMessageContext {
         $message = new MessageData(...array_replace([
             'messageId' => 10,
@@ -41,11 +43,21 @@ final class Fixtures
             'length' => mb_strlen((string) $text),
         ], $messageOverrides));
 
+        $user = new UserContext(userId: 42, username: 'tester', isBot: false);
+        if ($userOverrides !== []) {
+            $user = new UserContext(...array_replace([
+                'userId' => 42,
+                'username' => 'tester',
+                'isBot' => false,
+            ], $userOverrides));
+        }
+
         return new AntispamMessageContext(
-            user: new UserContext(userId: 42, username: 'tester', isBot: false),
+            user: $user,
             chat: new ChatContext(chatId: 100, type: 'group'),
             message: $message,
             behavior: $behavior ?? new BehaviorContext(),
+            settings: $settings,
         );
     }
 
@@ -70,7 +82,9 @@ final class Fixtures
 
     public static function engine(): RuleEngine
     {
-        return new RuleEngine(iterator_to_array(new RuleRegistry()));
+        return new RuleEngine(iterator_to_array(new RuleRegistry()), [
+            new \BAGArt\TelegramBotAntispam\Risk\HoneypotDetector(),
+        ]);
     }
 
     public static function evaluator(): \BAGArt\TelegramBotAntispam\Engine\AntispamEvaluator

@@ -59,7 +59,8 @@ it('makes verdicts reflect rule changes without manual cache flushing (dry-run)'
     $spamText = 'join t.me/spam_channel now';
     $before = antispamDryRun($spamText);
 
-    // Disable the advertising pattern rule via a DB row → verdict must change
+    // Disable the advertising pattern rule via a DB row → verdict must change.
+    // Direct model writes bypass the admin CRUD, so mirror its invalidation.
     AntispamRuleModel::query()->create([
         'bot_id' => null,
         'name' => 'advertising.regex',
@@ -73,6 +74,7 @@ it('makes verdicts reflect rule changes without manual cache flushing (dry-run)'
         'is_active' => false,
         'cooldown_seconds' => null,
     ]);
+    app(\BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::class)->invalidate();
 
     $after = antispamDryRun($spamText);
 
@@ -96,6 +98,7 @@ it('makes verdicts reflect score overrides from DB rules', function () {
         'is_active' => true,
         'cooldown_seconds' => null,
     ]);
+    app(\BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides::class)->invalidate();
 
     $report = antispamDryRun('join t.me/spam_channel now');
 
