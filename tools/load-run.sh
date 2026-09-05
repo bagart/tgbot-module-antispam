@@ -10,7 +10,7 @@ export TG_WEBHOOK_ALLOW_LOCAL_IPS=true
 export ANTISPAM_EXCLUDE_USER_IDS=424242   # suppress outbound Telegram calls (no network in this env)
 export PHP_CLI_SERVER_WORKERS=8
 
-TOOLS=misc/BAGArt/telegram-bot-antispam-module/tools
+TOOLS=misc/BAGArt/tgbot-module-antispam/tools
 
 pkill -f "artisan serve" 2>/dev/null || true
 pkill -f "server.php" 2>/dev/null || true
