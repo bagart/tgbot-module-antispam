@@ -33,30 +33,9 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/antispam.php', 'antispam');
 
-        // Composer-installed module discovery (config/telegram.php contract)
-        $providers = (array) Config::get('telegram.modules_providers', []);
-        Config::set('telegram.modules_providers', array_values(array_unique(array_merge(
-            $providers,
-            [AntispamModule::class],
-        ))));
-
-        // Default seed data (config/telegram.php contract): the host
-        // DatabaseSeeder consumes this list without knowing the module.
-        $seeders = (array) Config::get('telegram.modules_seeders', []);
-        Config::set('telegram.modules_seeders', array_values(array_unique(array_merge(
-            $seeders,
-            [Database\Seeders\AntispamDefaultsSeeder::class],
-        ))));
-
-        // Frontend pages (config/telegram.php contract): `php artisan
-        // tgapp:pages` turns this path into a Vite glob in the host's
-        // generated modules-pages file — no host-side module references.
-        $frontendPages = (array) Config::get('telegram.modules_frontend_pages', []);
-        Config::set('telegram.modules_frontend_pages', array_values(array_unique(array_merge(
-            $frontendPages,
-            [__DIR__.'/../resources/js/pages'],
-        ))));
-
+        // Frontend page sources are declared in config/tg_modules.php
+        // (frontendPages) and relayed by the module engine into
+        // telegram.modules_frontend_pages for the menu:pages generator.
         $this->app->singleton(Counter::class, fn ($app): Counter => (string) Config::get('antispam.counter_driver') === 'memory'
             ? $this->makeMemoryCounter()
             : $this->makeRedisCounter());
@@ -165,13 +144,7 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->commands([
-            \BAGArt\TelegramBotAntispam\Commands\BlocklistSyncCommand::class,
-            \BAGArt\TelegramBotAntispam\Commands\ValidateDatasetCommand::class,
-        ]);
-
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
-        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
     }
 
     private function makeRedisCounter(): RedisBatchCounter

@@ -1,4 +1,4 @@
-# telegram-bot-antispam-module
+# tgbot-module-antispam
 
 Anti-spam module for the [telegram-bot-platform](../../../). Deterministic anti-abuse
 engine implemented as a platform module (`TgModuleContract`): content + behavioral
@@ -25,7 +25,7 @@ PSR-4 mapping, a path repository entry, and its provider in
 Prod mode (servers without `misc/`):
 
 ```bash
-cmd/deps/install --mode=prod   # resolves bagart/telegram-bot-antispam-module from VCS sources
+cmd/deps/install --mode=prod   # resolves bagart/tgbot-module-antispam from VCS sources
 ```
 
 Register the provider in `bootstrap/providers.php`:
@@ -72,3 +72,11 @@ composer test   # runs pest from the host platform vendor (../../..)
 Feature tests boot the host platform app (TestCase + RefreshDatabase are bound in
 the platform `tests/Pest.php`); Redis integration tests auto-skip without a live
 Redis.
+
+## Menu integration
+
+Menu-hub surface per telegram-platform-menu/docs/tasks/menu_integration.md (M-5):
+AntispamWebUi (schema form over the strictness / global_cap keys that PolicyCompiler
+reads) and AntispamUiHandler (GET status, Admin, chat-scoped) returning the effective
+plan (thresholds, global cap, policy/ruleset versions, enabled rules). Captcha and
+the /appeal conversation stay in-chat by design.

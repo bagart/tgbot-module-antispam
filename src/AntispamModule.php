@@ -17,6 +17,8 @@ use BAGArt\TelegramBotAntispam\Processors\AntispamStatusCommand;
 use BAGArt\TelegramBotAntispam\Processors\AppealCommand;
 use BAGArt\TelegramBotAntispam\Processors\CaptchaCallbackProcessor;
 use BAGArt\TelegramBotAntispam\Processors\CaptchaJoinProcessor;
+use BAGArt\TelegramBotAntispam\Web\AntispamUiHandler;
+use BAGArt\TelegramBotAntispam\Web\AntispamWebUi;
 
 /**
  * Anti-spam platform module.
@@ -38,6 +40,7 @@ final class AntispamModule implements TgModuleContract
                 TgModuleCapability::Processor,
                 TgModuleCapability::Command,
                 TgModuleCapability::Rule,
+                TgModuleCapability::Ui,
             ],
             defaultEnabled: false,
             failClosed: true,
@@ -52,6 +55,8 @@ final class AntispamModule implements TgModuleContract
             ->processor(CallbackQueryTypeDTO::class, CaptchaCallbackProcessor::class)
             ->command(AntispamStatusCommand::NAME, AntispamStatusCommand::class)
             ->command(AntispamReportCommand::NAME, AntispamReportCommand::class)
-            ->command(AppealCommand::NAME, AppealCommand::class);
+            ->command(AppealCommand::NAME, AppealCommand::class)
+            ->webUi(AntispamWebUi::class)
+            ->webApi(AntispamUiHandler::class);
     }
 }

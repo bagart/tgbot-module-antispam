@@ -1,6 +1,6 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "bagart/telegram-bot-antispam-module",
+    "name": "bagart/tgbot-module-antispam",
     "description": "Anti-spam module for the Telegram bot platform: deterministic rule engine, sliding-window counters, strikes and async enforcement",
     "type": "library",
     "license": "MIT",
@@ -22,7 +22,7 @@
     "require": {
         "php": "^8.5",
         "bagart/telegram-bot-lib": "*",
-        "bagart/telegram-bot-management": "*",
+        "bagart/telegram-platform-management": "*",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^13.0"
     },
@@ -48,9 +48,9 @@
             "type": "path",
             "url": "../telegram-bot-lib"
         },
-        "telegram-bot-management": {
+        "telegram-platform-management": {
             "type": "path",
-            "url": "../telegram-bot-management"
+            "url": "../telegram-platform-management"
         },
         "php-async-kernel-lib": {
             "type": "path",
@@ -62,12 +62,12 @@
         },
         "baseline": {
             "type": "path",
-            "url": "../telegram-devops-baseline"
+            "url": "../telegram-platform-devops-baseline"
         }
     },
     "minimum-stability": "dev",
     "prefer-stable": true,
     "require-dev": {
-        "bagart/telegram-devops-baseline": "@dev"
+        "bagart/telegram-platform-devops-baseline": "@dev"
     }
 }
