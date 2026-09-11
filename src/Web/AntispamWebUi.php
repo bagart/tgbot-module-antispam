@@ -65,6 +65,24 @@ final class AntispamWebUi implements TgSettingsFormContract, TgWebUiContract
                 'Strictness preset' => 'Уровень строгости',
                 'Global score cap per user' => 'Глобальный лимит баллов на пользователя',
             ],
+            'fr' => [
+                'Anti-Spam' => 'Anti-Spam',
+                'Spam protection policy for the chat' => 'Politique de protection contre le spam du chat',
+                'Strictness preset' => 'Préréglage de sévérité',
+                'Global score cap per user' => 'Limite globale de points par utilisateur',
+            ],
+            'es' => [
+                'Anti-Spam' => 'Anti-Spam',
+                'Spam protection policy for the chat' => 'Política de protección contra spam del chat',
+                'Strictness preset' => 'Perfil de severidad',
+                'Global score cap per user' => 'Límite global de puntos por usuario',
+            ],
+            'zh' => [
+                'Anti-Spam' => '反垃圾',
+                'Spam protection policy for the chat' => '聊天垃圾防护策略',
+                'Strictness preset' => '严格程度预设',
+                'Global score cap per user' => '每位用户全局分数上限',
+            ],
         ];
     }
 
