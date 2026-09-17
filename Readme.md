@@ -5,7 +5,7 @@ engine implemented as a platform module (`TgModuleContract`): content + behavior
 rules, score aggregation with per-group caps, sliding-window counters in Redis,
 risk context, policy → violation → strike → async enforcement.
 
-Design source: `docs/tasks/todo.antispam.md` (RFC v5.3) in the platform repo.
+Design source: RFC v5.3 in the platform repo.
 
 ## Core properties
 
@@ -75,7 +75,7 @@ Redis.
 
 ## Menu integration
 
-Menu-hub surface per telegram-platform-menu/docs/tasks/menu_integration.md (M-5):
+Menu-hub surface per `telegram-platform-menu` contribution system (M-5):
 AntispamWebUi (schema form over the strictness / global_cap keys that PolicyCompiler
 reads) and AntispamUiHandler (GET status, Admin, chat-scoped) returning the effective
 plan (thresholds, global cap, policy/ruleset versions, enabled rules). Captcha and
