@@ -4,7 +4,7 @@
 
 | Need | File |
 |---|---|
-| What it does, decisions | `SDD-antispam` |
+| What it does, decisions | [`sdd/antispam.md`](sdd/antispam.md) |
 
 ## Source map (src/)
 
