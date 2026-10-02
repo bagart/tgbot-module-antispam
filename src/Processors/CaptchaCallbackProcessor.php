@@ -10,6 +10,7 @@ use BAGArt\TelegramBot\Contracts\TgApi\TgApiTypeDTOContract;
 use BAGArt\TelegramBot\Processing\BotProcessorContext;
 use BAGArt\TelegramBot\Processing\ErrorHandling\ProcessorErrorContext;
 use BAGArt\TelegramBot\TgApi\Types\DTO\CallbackQueryTypeDTO;
+use BAGArt\TelegramBotAntispam\AntispamPipeline;
 use BAGArt\TelegramBotAntispam\Captcha\CaptchaService;
 
 /** Routes "antispam:captcha:*" inline callbacks into the CAPTCHA flow. */
