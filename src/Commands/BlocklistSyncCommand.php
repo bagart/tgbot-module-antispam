@@ -6,8 +6,9 @@ namespace BAGArt\TelegramBotAntispam\Commands;
 
 use BAGArt\TelegramBotAntispam\Models\AntispamBlocklistFeed;
 use BAGArt\TelegramBotAntispam\Models\AntispamUserListEntry;
+use BAGArt\TelegramBot\Contracts\Modules\ModuleEnablementContract;
+use BAGArt\TelegramBot\Contracts\Modules\ModuleSettingsContract;
 use BAGArt\TelegramBotManagement\Models\TgBot;
-use BAGArt\TelegramBotManagement\Models\TgModuleEnablement;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Config;
 
@@ -28,6 +29,9 @@ final class BlocklistSyncCommand extends Command
         $retentionDays = max(1, (int) Config::get('antispam.blocklist.retention_days', 30));
         $expiresAt = now()->addDays($retentionDays);
 
+        $settings = app(ModuleSettingsContract::class);
+        $enablements = app(ModuleEnablementContract::class);
+
         $subscribers = TgBot::query()
             ->when($this->option('bot') !== null, fn ($q) => $q->where('bot_id', (string) $this->option('bot')))
             ->pluck('bot_id');
@@ -44,18 +48,17 @@ final class BlocklistSyncCommand extends Command
         $skipped = 0;
 
         foreach ($subscribers as $botId) {
-            if (! $this->optedIn((string) $botId)) {
+            if (! $this->optedIn($settings, (string) $botId)) {
                 ++$skipped;
 
                 continue;
             }
 
-            $chatIds = TgModuleEnablement::query()
-                ->where('bot_id', $botId)
-                ->where('module_id', 'antispam')
-                ->where('is_enabled', true)
-                ->whereNotNull('chat_id')
-                ->pluck('chat_id');
+            $chatIds = collect($settings->chatsWithSettings('antispam', (string) $botId))
+                ->filter(fn (array $row): bool => $row['chatId'] !== null)
+                ->filter(fn (array $row): bool => $enablements->isEnabled('antispam', (string) $botId, (int) $row['chatId']))
+                ->map(fn (array $row): int => (int) $row['chatId'])
+                ->values();
 
             foreach ($feed as $entry) {
                 // never ingest a bot's own bans back into itself
@@ -109,18 +112,10 @@ final class BlocklistSyncCommand extends Command
         return self::SUCCESS;
     }
 
-    private function optedIn(string $botId): bool
+    private function optedIn(ModuleSettingsContract $settings, string $botId): bool
     {
-        $settings = TgModuleEnablement::query()
-            ->where('bot_id', $botId)
-            ->whereNull('chat_id')
-            ->where('module_id', 'antispam')
-            ->value('module_settings');
+        $sync = $settings->settingsFor('antispam', $botId)['blocklist_sync'] ?? null;
 
-        if (! is_array($settings)) {
-            return false;
-        }
-
-        return (bool) (($settings['blocklist_sync']['enabled'] ?? false) === true);
+        return is_array($sync) && ($sync['enabled'] ?? false) === true;
     }
 }

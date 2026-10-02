@@ -4,8 +4,8 @@ namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
 use BAGArt\TelegramBotAntispam\Http\Controllers\Support\AntispamEffectivePlan;
 use BAGArt\TelegramBot\Contracts\Modules\ModuleEnablementContract;
+use BAGArt\TelegramBot\Contracts\Modules\ModuleSettingsContract;
 use BAGArt\TelegramBotManagement\Models\TgBot;
-use BAGArt\TelegramBotManagement\Models\TgModuleEnablement;
 use BAGArt\TelegramBotAntispam\AntispamPipeline;
 use BAGArt\TelegramBotAntispam\Models\AntispamRuleModel;
 use BAGArt\TelegramBotAntispam\Rules\RuleRegistry;
@@ -21,26 +21,30 @@ class AntispamChatsController
     public function __construct(
         private readonly AntispamEffectivePlan $effectivePlan,
         private readonly ModuleEnablementContract $enablements,
+        private readonly ModuleSettingsContract $settings,
     ) {
     }
 
     public function index(): Response
     {
-        $rows = TgModuleEnablement::query()
-            ->where('module_id', AntispamPipeline::MODULE_ID)
-            ->whereNotNull('chat_id')
-            ->orderBy('bot_id')
-            ->orderBy('chat_id')
-            ->get(['id', 'bot_id', 'chat_id', 'is_enabled', 'module_settings']);
+        $chats = collect($this->settings->chatsWithSettings(AntispamPipeline::MODULE_ID))
+            ->filter(fn (array $row): bool => $row['chatId'] !== null)
+            ->sortBy('chatId')
+            ->sortBy('botId')
+            ->values()
+            ->map(function (array $row): array {
+                $botId = (string) $row['botId'];
+                $chatId = (int) $row['chatId'];
 
-        $chats = $rows->map(fn (TgModuleEnablement $row): array => [
-            'botId' => (string) $row->bot_id,
-            'chatId' => (int) $row->chat_id,
-            'enabled' => (bool) $row->is_enabled,
-            'settings' => $this->chatSettings($row),
-            // Effective plan preview — proves the compiled plan picks settings up
-            'rulesetVersion' => $this->effectivePlan->plan((string) $row->bot_id, (int) $row->chat_id)->rulesetVersion,
-        ]);
+                return [
+                    'botId' => $botId,
+                    'chatId' => $chatId,
+                    'enabled' => $this->enablements->isEnabled(AntispamPipeline::MODULE_ID, $botId, $chatId),
+                    'settings' => $this->chatSettings((array) $row['settings']),
+                    // Effective plan preview — proves the compiled plan picks settings up
+                    'rulesetVersion' => $this->effectivePlan->plan($botId, $chatId)->rulesetVersion,
+                ];
+            });
 
         return Inertia::render('antispam/chats', [
             'chats' => $chats,
@@ -50,7 +54,8 @@ class AntispamChatsController
     }
 
     /**
-     * Saves chat-level antispam settings into tg_module_enablements.module_settings.
+     * Saves chat-level antispam settings through ModuleSettingsContract
+     * (driver-agnostic merge at the chat scope; null patch values inherit).
      * custom_rules semantics: null = inherit/all active, non-empty list = allowlist,
      * [] is invalid (explicitly rejected below).
      */
@@ -87,9 +92,11 @@ class AntispamChatsController
             }
         }
 
-        TgModuleEnablement::query()->updateOrCreate(
-            ['module_id' => AntispamPipeline::MODULE_ID, 'bot_id' => $botId, 'chat_id' => $chatId],
-            ['module_settings' => $this->mergeSettings($botId, $chatId, $this->buildSettingsPatch($validated))],
+        $this->settings->patchSettings(
+            AntispamPipeline::MODULE_ID,
+            $botId,
+            $chatId,
+            $this->buildSettingsPatch($validated),
         );
 
         // Drop enablement + settings caches so the next webhook recompiles
@@ -155,35 +162,11 @@ class AntispamChatsController
     }
 
     /**
-     * @param  array<string, mixed>  $patch
+     * @param  array<string, mixed>  $settings  raw stored chat-scope settings
      * @return array<string, mixed>
      */
-    private function mergeSettings(string $botId, int $chatId, array $patch): array
+    private function chatSettings(array $settings): array
     {
-        $merged = (array) (TgModuleEnablement::query()
-            ->where('module_id', AntispamPipeline::MODULE_ID)
-            ->where('bot_id', $botId)
-            ->where('chat_id', $chatId)
-            ->value('module_settings') ?? []);
-
-        foreach ($patch as $key => $value) {
-            if ($value === null) {
-                unset($merged[$key]);
-            } else {
-                $merged[$key] = $value;
-            }
-        }
-
-        return $merged;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function chatSettings(TgModuleEnablement $row): array
-    {
-        $settings = (array) $row->module_settings;
-
         return [
             'strictness' => $settings['strictness'] ?? null,
             'thresholds' => $settings['thresholds'] ?? null,

@@ -2,13 +2,16 @@
 
 declare(strict_types=1);
 
+use BAGArt\TelegramModuleEngine\Registry\EngineModuleRegistry;
+
 /**
- * The provider self-registers its Inertia pages dir into the platform
- * registry; `php artisan menu:pages` consumes it on the host side.
+ * Frontend page sources are declared as frontendPages in config/tg_modules.php
+ * (declarative replacement for the retired telegram.modules_frontend_pages
+ * side-channel); the module engine relays them to the host page generator.
  */
 describe('frontend pages registration', function () {
-    it('registers its resources/js/pages dir into telegram.modules_frontend_pages', function () {
-        $registered = array_map(strval(...), (array) config('telegram.modules_frontend_pages'));
+    it('declares its resources/js/pages dir for the engine frontend registry', function () {
+        $registered = array_map(strval(...), app(EngineModuleRegistry::class)->frontendPages());
 
         expect($registered)->not->toBeEmpty();
 

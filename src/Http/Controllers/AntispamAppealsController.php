@@ -3,6 +3,7 @@
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
 use BAGArt\TelegramBot\Configs\TgBotConfig;
+use BAGArt\TelegramBotAntispam\Auth\T2Gate;
 use BAGArt\TelegramBotAntispam\Moderation\AntispamModerationService;
 use BAGArt\TelegramBotAntispam\Models\AntispamAppeal;
 use BAGArt\TelegramBotAntispam\Models\AntispamViolation;
@@ -17,8 +18,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AntispamAppealsController
 {
+    use ReasonVisibility;
+
     public function __construct(
         private readonly AntispamModerationService $moderation,
+        private readonly ?T2Gate $gate = null,
     ) {
     }
 
@@ -54,7 +58,13 @@ class AntispamAppealsController
                         'botId' => (string) $appeal->violation->bot_id,
                         'chatId' => (int) $appeal->violation->chat_id,
                         'messageText' => (string) ($appeal->violation->message_snapshot['text'] ?? $appeal->violation->message_snapshot['caption'] ?? ''),
-                        'matchedRules' => (array) $appeal->violation->matched_rules,
+                        'matchedRules' => $this->visibleMatchedRules(
+                            $this->gate,
+                            $request,
+                            (string) $appeal->violation->bot_id,
+                            (int) $appeal->violation->chat_id,
+                            (array) $appeal->violation->matched_rules,
+                        ),
                         'score' => (int) $appeal->violation->score,
                         'enforcementAction' => (string) $appeal->violation->enforcement_action,
                         'status' => (string) $appeal->violation->status,

@@ -14,7 +14,7 @@ it('satisfies the TgWebUiContract shape for the antispam module', function () {
 });
 
 it('maps strictness and global_cap onto the engine settings keys', function () {
-    $patch = (new AntispamWebUi)->validate([
+    $patch = (new AntispamWebUi())->validate([
         'strictness' => 'strict',
         'global_cap' => '500',
     ]);
@@ -24,14 +24,14 @@ it('maps strictness and global_cap onto the engine settings keys', function () {
 });
 
 it('clamps the score cap to sane bounds', function () {
-    $form = new AntispamWebUi;
+    $form = new AntispamWebUi();
 
     expect($form->validate(['global_cap' => 1])['global_cap'])->toBe(50)
         ->and($form->validate(['global_cap' => 10000])['global_cap'])->toBe(1000);
 });
 
 it('rejects unknown strictness presets and unrelated keys', function () {
-    $form = new AntispamWebUi;
+    $form = new AntispamWebUi();
 
     expect(fn () => $form->validate(['strictness' => 'lawless']))
         ->toThrow(InvalidArgumentException::class)

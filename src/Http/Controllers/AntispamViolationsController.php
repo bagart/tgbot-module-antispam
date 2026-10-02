@@ -3,6 +3,7 @@
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
 use BAGArt\TelegramBot\Configs\TgBotConfig;
+use BAGArt\TelegramBotAntispam\Auth\T2Gate;
 use BAGArt\TelegramBotAntispam\Moderation\AntispamModerationService;
 use BAGArt\TelegramBotAntispam\Models\AntispamStrikeEvent;
 use BAGArt\TelegramBotAntispam\Models\AntispamViolation;
@@ -18,8 +19,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class AntispamViolationsController
 {
+    use ReasonVisibility;
+
     public function __construct(
         private readonly AntispamModerationService $moderation,
+        private readonly ?T2Gate $gate = null,
     ) {
     }
 
@@ -52,12 +56,24 @@ class AntispamViolationsController
                     'userId' => (int) $v->user_id,
                     'messageId' => (int) $v->message_id,
                     'messageText' => (string) ($v->message_snapshot['text'] ?? $v->message_snapshot['caption'] ?? ''),
-                    'matchedRules' => (array) $v->matched_rules,
+                    'matchedRules' => $this->visibleMatchedRules(
+                        $this->gate,
+                        $request,
+                        (string) $v->bot_id,
+                        (int) $v->chat_id,
+                        (array) $v->matched_rules,
+                    ),
                     'groupBreakdown' => (array) $v->group_breakdown,
                     'score' => (int) $v->score,
                     'enforcementAction' => (string) $v->enforcement_action,
                     'status' => (string) $v->status,
-                    'evaluationSnapshot' => (array) $v->evaluation_snapshot,
+                    'evaluationSnapshot' => $this->visibleEvaluationSnapshot(
+                        $this->gate,
+                        $request,
+                        (string) $v->bot_id,
+                        (int) $v->chat_id,
+                        (array) $v->evaluation_snapshot,
+                    ),
                     'riskContext' => $v->risk_context,
                     'createdAt' => (string) $v->created_at,
                 ]),
@@ -171,6 +187,19 @@ class AntispamViolationsController
                 'at' => $s->created_at->toISOString(),
             ]),
         ];
+
+        // D14/D15: the history is a moderation log — drop events from chats
+        // the viewer lacks moderation.log.view in (memoized per capability|bot|chat).
+        $events = array_values(array_filter(
+            $events,
+            fn (array $event): bool => $this->capabilityAllowed(
+                $this->gate,
+                $request,
+                T2Gate::LOG_CAPABILITY,
+                (string) $data['bot_id'],
+                (int) $event['chatId'],
+            ),
+        ));
 
         usort($events, static fn (array $a, array $b): int => strcmp((string) $a['at'], (string) $b['at']));
 

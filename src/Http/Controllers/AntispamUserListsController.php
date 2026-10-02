@@ -2,10 +2,11 @@
 
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
+use BAGArt\TelegramBotAntispam\Auth\T2Gate;
 use BAGArt\TelegramBotAntispam\Models\AntispamUserListEntry;
 use BAGArt\TelegramBotAntispam\UserList\UserListManager;
+use BAGArt\TelegramBot\Contracts\Modules\ModuleSettingsContract;
 use BAGArt\TelegramBotManagement\Models\TgBot;
-use BAGArt\TelegramBotManagement\Models\TgModuleEnablement;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,19 +15,28 @@ use Inertia\Response;
 
 class AntispamUserListsController
 {
+    use ReasonVisibility;
+
     public function __construct(
         private readonly UserListManager $lists,
+        private readonly ModuleSettingsContract $settings,
+        private readonly ?T2Gate $gate = null,
     ) {
     }
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('antispam/user-lists', [
             'entries' => AntispamUserListEntry::query()
                 ->orderBy('bot_id')
                 ->orderBy('chat_id')
                 ->paginate(50)
-                ->withQueryString(),
+                ->withQueryString()
+                ->through(fn (AntispamUserListEntry $entry): AntispamUserListEntry => $this->visibleListEntry(
+                    $this->gate,
+                    $request,
+                    $entry,
+                )),
             'bots' => TgBot::query()->orderBy('bot_id')->get(['bot_id']),
             'blocklistSyncBots' => $this->blocklistSyncBotIds(),
         ]);
@@ -35,7 +45,8 @@ class AntispamUserListsController
     /**
      * Federated blocklist opt-in toggle (P3.7): stores
      * {"blocklist_sync": {"enabled": bool}} into the BOT-scope antispam
-     * enablement settings.
+     * settings and force-enables the bot-scope module row (reserved
+     * `enabled` key handled by the contract).
      */
     public function toggleBlocklistSync(Request $request): RedirectResponse
     {
@@ -44,16 +55,10 @@ class AntispamUserListsController
             'enabled' => ['required', 'boolean'],
         ]);
 
-        $row = TgModuleEnablement::query()->firstOrNew([
-            'bot_id' => $validated['bot_id'],
-            'chat_id' => null,
-            'module_id' => 'antispam',
+        $this->settings->patchSettings('antispam', (string) $validated['bot_id'], null, [
+            'blocklist_sync' => ['enabled' => $validated['enabled']],
+            'enabled' => true,
         ]);
-        $row->is_enabled = true;
-        $settings = (array) ($row->module_settings ?? []);
-        $settings['blocklist_sync'] = ['enabled' => $validated['enabled']];
-        $row->module_settings = $settings;
-        $row->save();
 
         return to_route('antispam.user-lists.index');
     }
@@ -61,12 +66,15 @@ class AntispamUserListsController
     /** @return list<string> bots with blocklist sync enabled */
     private function blocklistSyncBotIds(): array
     {
-        return TgModuleEnablement::query()
-            ->whereNull('chat_id')
-            ->where('module_id', 'antispam')
-            ->get(['bot_id', 'module_settings'])
-            ->filter(fn ($row): bool => (bool) (((array) $row->module_settings)['blocklist_sync']['enabled'] ?? false) === true)
+        return TgBot::query()
+            ->orderBy('bot_id')
             ->pluck('bot_id')
+            ->filter(function ($botId): bool {
+                $sync = $this->settings->settingsFor('antispam', (string) $botId)['blocklist_sync'] ?? null;
+
+                return is_array($sync) && (bool) ($sync['enabled'] ?? false) === true;
+            })
+            ->values()
             ->all();
     }
 

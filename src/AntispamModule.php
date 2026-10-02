@@ -36,6 +36,7 @@ final class AntispamModule implements TgModuleContract
             id: AntispamPipeline::MODULE_ID,
             name: 'Anti-Spam',
             version: '1.0.0',
+            requiresModules: ['menu' => '*'],
             capabilities: [
                 TgModuleCapability::Processor,
                 TgModuleCapability::Command,
@@ -57,6 +58,7 @@ final class AntispamModule implements TgModuleContract
             ->command(AntispamReportCommand::NAME, AntispamReportCommand::class)
             ->command(AppealCommand::NAME, AppealCommand::class)
             ->webUi(AntispamWebUi::class)
-            ->webApi(AntispamUiHandler::class);
+            ->webApi(AntispamUiHandler::class)
+            ->webPermissions(AntispamPermissionResolver::class);
     }
 }

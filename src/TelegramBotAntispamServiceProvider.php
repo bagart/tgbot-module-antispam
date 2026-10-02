@@ -7,6 +7,8 @@ namespace BAGArt\TelegramBotAntispam;
 use BAGArt\AsyncKernel\Wrappers\ASKCacheWrapper;
 use BAGArt\AsyncKernel\Wrappers\ASKLogWrapper;
 use BAGArt\TelegramBot\Contracts\Modules\ModuleSettingsContract;
+use BAGArt\TelegramBotAccess\AccessControlContract;
+use BAGArt\TelegramBotAntispam\Auth\T2Gate;
 use BAGArt\TelegramBotAntispam\Counters\Counter;
 use BAGArt\TelegramBotAntispam\Counters\MemoryBatchCounter;
 use BAGArt\TelegramBotAntispam\Counters\ObservationCollector;
@@ -140,6 +142,15 @@ final class TelegramBotAntispamServiceProvider extends ServiceProvider
                 excludeUserIds: array_map('intval', (array) Config::get('antispam.exclude_user_ids', [])),
             );
         });
+
+        // D14/D15 moderation.reason.view gate; no access package = no gate
+        // = controllers fall back to showing reasons (legacy behavior).
+        // The access contract is an interface, hence interface_exists().
+        if (interface_exists(AccessControlContract::class)) {
+            $this->app->singleton(T2Gate::class, fn ($app): T2Gate => new T2Gate(
+                access: $app->make(AccessControlContract::class),
+            ));
+        }
     }
 
     public function boot(): void

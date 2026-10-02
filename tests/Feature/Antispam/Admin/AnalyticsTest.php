@@ -18,11 +18,16 @@ function analyticsViolation(array $overrides = []): AntispamViolation
 }
 
 it('buckets heatmap cells by weekday and hour', function () {
-    // Tuesday 2026-08-25 14:30 local — two violations in the same hour cell
-    analyticsViolation(['created_at' => '2026-08-25 14:30:00']);
-    analyticsViolation(['created_at' => '2026-08-25 14:50:00']);
+    // Last week's Tuesday/Monday (7–13 days back) always sits inside the
+    // rolling 30-day heatmap window; fixed calendar dates would fall out of it.
+    $daysBackToTuesday = (((int) now()->format('N') - 2 + 7) % 7) + 7;
+    $daysBackToMonday = (((int) now()->format('N') - 1 + 7) % 7) + 7;
+
+    // Tuesday 14:30 — two violations in the same hour cell
+    analyticsViolation(['created_at' => now()->subDays($daysBackToTuesday)->setTime(14, 30)]);
+    analyticsViolation(['created_at' => now()->subDays($daysBackToTuesday)->setTime(14, 50)]);
     // Monday 09:00
-    analyticsViolation(['created_at' => '2026-08-24 09:00:00']);
+    analyticsViolation(['created_at' => now()->subDays($daysBackToMonday)->setTime(9, 0)]);
     // Outside the window must be ignored
     analyticsViolation(['created_at' => now()->subDays(60)]);
 

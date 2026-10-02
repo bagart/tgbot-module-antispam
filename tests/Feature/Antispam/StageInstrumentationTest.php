@@ -85,8 +85,6 @@ it('emits stage timings when instrumentation is enabled and stays silent otherwi
     // spam path → observe + detect + violation stages
     $pipeline->handle(antispamMessage(100, 43, 'join t.me/spam_channel now', 11), $botConfig);
 
-    fwrite(STDERR, 'ENTRIES: '.$entries->toJson()."
-");
     $stages = $entries
         ->filter(fn (array $e): bool => str_contains($e['message'], 'antispam.stage'))
         ->pluck('context.stage')
