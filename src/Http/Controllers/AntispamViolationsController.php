@@ -2,6 +2,7 @@
 
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBot\Configs\TgBotConfig;
 use BAGArt\TelegramBotAntispam\Auth\T2Gate;
 use BAGArt\TelegramBotAntispam\Moderation\AntispamModerationService;
@@ -98,6 +99,15 @@ class AntispamViolationsController
             return response()->json(['error' => $error], 409);
         }
 
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::VIOLATION_ENFORCED,
+            botId: (string) $violation->bot_id,
+            subjectType: 'antispam_violation',
+            subjectId: $violation->id,
+            actorId: $request->user()?->id,
+            context: ['action' => $data['action'], 'enforcementAction' => (string) $violation->enforcement_action],
+        ));
+
         return response()->json([
             'violationId' => (string) $violation->id,
             'status' => (string) $violation->refresh()->status,
@@ -139,6 +149,14 @@ class AntispamViolationsController
         foreach (array_diff($data['ids'], $violations->modelKeys()) as $missingId) {
             $skipped[] = ['id' => $missingId, 'reason' => 'Violation not found.'];
         }
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::VIOLATION_BULK_ENFORCED,
+            subjectType: 'antispam_violation',
+            subjectId: implode(',', $data['ids']),
+            actorId: $request->user()?->id,
+            context: ['action' => $data['action'], 'requested' => count($data['ids']), 'updated' => count($updated), 'skipped' => count($skipped)],
+        ));
 
         return response()->json(['updated' => $updated, 'skipped' => $skipped]);
     }

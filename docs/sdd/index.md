@@ -5,4 +5,4 @@
 
 | Topic | File | Summary |
 |---|---|---|
-| antispam | [`antispam.md`](antispam.md) | What it does, decisions |
+| antispam | [`antispam.md`](antispam.md) | What it does, decisions; /report counter (B4 Option B — docblock corrected, no persistence) |

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace BAGArt\TelegramBotAntispam\Violation;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBotAntispam\Domain\AggregatedScore;
 use BAGArt\TelegramBotAntispam\Domain\AntiSpamVerdict;
 use BAGArt\TelegramBotAntispam\Domain\EnforcementAction;
@@ -86,6 +87,14 @@ final readonly class ViolationRecorder
             'enforcement_action' => ($overrideAction ?? $verdict->action)->value,
             'status' => AntispamViolation::STATUS_PENDING,
         ]);
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::VIOLATION_RECORDED,
+            botId: $botId,
+            subjectType: 'antispam_violation',
+            subjectId: $violation->id,
+            context: ['chatId' => $chatId, 'userId' => $userId, 'score' => $verdict->score, 'action' => $verdict->action->value],
+        ));
 
         return [$violation, true];
     }

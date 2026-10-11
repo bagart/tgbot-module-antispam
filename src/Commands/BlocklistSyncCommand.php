@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace BAGArt\TelegramBotAntispam\Commands;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBotAntispam\Models\AntispamBlocklistFeed;
 use BAGArt\TelegramBotAntispam\Models\AntispamUserListEntry;
 use BAGArt\TelegramBot\Contracts\Modules\ModuleEnablementContract;
@@ -108,6 +109,12 @@ final class BlocklistSyncCommand extends Command
         }
 
         $this->info("Blocklist sync done: {$created} created, {$updated} refreshed, {$skipped} bots skipped (not opted in).");
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::BLOCKLIST_SYNCED,
+            subjectType: 'blocklist_feed',
+            context: ['created' => $created, 'refreshed' => $updated, 'skippedBots' => $skipped],
+        ));
 
         return self::SUCCESS;
     }

@@ -2,6 +2,7 @@
 
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBotAntispam\Http\Controllers\Support\AntispamEffectivePlan;
 use BAGArt\TelegramBot\Contracts\Modules\ModuleEnablementContract;
 use BAGArt\TelegramBot\Contracts\Modules\ModuleSettingsContract;
@@ -101,6 +102,15 @@ class AntispamChatsController
 
         // Drop enablement + settings caches so the next webhook recompiles
         $this->enablements->refresh($botId, $chatId);
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::SETTINGS_CHANGED,
+            botId: $botId,
+            subjectType: 'chat',
+            subjectId: $chatId,
+            actorId: $request->user()?->id,
+            newState: $this->buildSettingsPatch($validated),
+        ));
 
         return to_route('antispam.chats.index');
     }

@@ -2,6 +2,7 @@
 
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBot\Configs\TgBotConfig;
 use BAGArt\TelegramBotAntispam\Auth\T2Gate;
 use BAGArt\TelegramBotAntispam\Moderation\AntispamModerationService;
@@ -104,6 +105,15 @@ class AntispamAppealsController
         if (! $decided) {
             return response()->json(['error' => 'Appeal has already been decided.'], 409);
         }
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::APPEAL_DECIDED,
+            botId: (string) $violation->bot_id,
+            subjectType: 'antispam_appeal',
+            subjectId: $appeal->id,
+            actorId: $request->user()?->id,
+            context: ['decision' => $data['decision'], 'violationId' => (string) $violation->id],
+        ));
 
         return response()->json([
             'appealId' => (string) $appeal->id,

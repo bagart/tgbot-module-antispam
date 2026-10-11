@@ -11,6 +11,7 @@ use BAGArt\TelegramBot\Modules\TgModuleRegistrar;
 use BAGArt\TelegramBot\TgApi\Types\DTO\CallbackQueryTypeDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\ChatMemberUpdatedTypeDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\MessageTypeDTO;
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBotAntispam\Processors\AntispamMessageProcessor;
 use BAGArt\TelegramBotAntispam\Processors\AntispamReportCommand;
 use BAGArt\TelegramBotAntispam\Processors\AntispamStatusCommand;
@@ -59,6 +60,7 @@ final class AntispamModule implements TgModuleContract
             ->command(AppealCommand::NAME, AppealCommand::class)
             ->webUi(AntispamWebUi::class)
             ->webApi(AntispamUiHandler::class)
-            ->webPermissions(AntispamPermissionResolver::class);
+            ->webPermissions(AntispamPermissionResolver::class)
+            ->auditEvent(AntispamAuditEvent::class);
     }
 }

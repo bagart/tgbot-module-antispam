@@ -2,6 +2,7 @@
 
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBotAntispam\Auth\T2Gate;
 use BAGArt\TelegramBotAntispam\Models\AntispamUserListEntry;
 use BAGArt\TelegramBotAntispam\UserList\UserListManager;
@@ -60,6 +61,15 @@ class AntispamUserListsController
             'enabled' => true,
         ]);
 
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::BLOCKLIST_SYNC_CHANGED,
+            botId: (string) $validated['bot_id'],
+            subjectType: 'bot_settings',
+            subjectId: (string) $validated['bot_id'],
+            actorId: $request->user()?->id,
+            newState: ['blocklist_sync' => (bool) $validated['enabled']],
+        ));
+
         return to_route('antispam.user-lists.index');
     }
 
@@ -105,6 +115,15 @@ class AntispamUserListsController
 
         $this->lists->refresh($validated['bot_id'], (int) $validated['chat_id']);
 
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::USERLIST_ENTRY_ADDED,
+            botId: (string) $validated['bot_id'],
+            subjectType: 'antispam_userlist_entry',
+            subjectId: (string) $validated['user_id'],
+            actorId: $request->user()?->id,
+            context: ['listType' => (string) $validated['list_type'], 'chatId' => (int) $validated['chat_id']],
+        ));
+
         return to_route('antispam.user-lists.index');
     }
 
@@ -113,6 +132,15 @@ class AntispamUserListsController
         $entry->delete();
 
         $this->lists->refresh((string) $entry->bot_id, (int) $entry->chat_id);
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::USERLIST_ENTRY_REMOVED,
+            botId: (string) $entry->bot_id,
+            subjectType: 'antispam_userlist_entry',
+            subjectId: (string) $entry->user_id,
+            actorId: auth()->user()?->id,
+            context: ['listType' => (string) $entry->list_type, 'chatId' => (int) $entry->chat_id],
+        ));
 
         return to_route('antispam.user-lists.index');
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace BAGArt\TelegramBotAntispam\Processors;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBot\Configs\TgBotConfig;
 use BAGArt\TelegramBot\Contracts\Outbound\TgSenderContract;
 use BAGArt\TelegramBot\Contracts\Processing\Processors\TgModuleProcessorContract;
@@ -91,6 +92,17 @@ final class AppealCommand implements TgModuleProcessorContract
             $this->reply($botConfig, $chatId, '⚠️ Appeals are temporarily unavailable. Try again later.');
 
             return;
+        }
+
+        if ($outcome === AppealFilingOutcome::Created) {
+            event(new AntispamAuditEvent(
+                AntispamAuditEvent::APPEAL_SUBMITTED,
+                botId: $botConfig->botId,
+                subjectType: 'antispam_appeal',
+                subjectId: $chatId,
+                actorId: $dto->from?->id,
+                context: ['chatId' => $chatId, 'userId' => (int) ($dto->from?->id ?? 0)],
+            ));
         }
 
         $this->reply($botConfig, $chatId, match ($outcome) {

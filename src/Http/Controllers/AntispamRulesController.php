@@ -2,6 +2,7 @@
 
 namespace BAGArt\TelegramBotAntispam\Http\Controllers;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBotManagement\Models\TgBot;
 use BAGArt\TelegramBotAntispam\Engine\DbRuleOverrides;
 use BAGArt\TelegramBotAntispam\Models\AntispamRuleModel;
@@ -35,18 +36,38 @@ class AntispamRulesController
 
     public function store(Request $request): RedirectResponse
     {
-        AntispamRuleModel::query()->create(
+        $rule = AntispamRuleModel::query()->create(
             $this->validated($request) + ['created_by' => $request->user()?->email],
         );
         $this->dbRuleOverrides->invalidate();
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::RULE_CREATED,
+            botId: $rule->bot_id,
+            subjectType: 'antispam_rule',
+            subjectId: $rule->id,
+            actorId: $request->user()?->id,
+            context: ['name' => (string) $rule->name, 'groupId' => (string) $rule->group_id],
+        ));
 
         return to_route('antispam.rules.index');
     }
 
     public function update(Request $request, AntispamRuleModel $rule): RedirectResponse
     {
-        $rule->update($this->validated($request));
+        $validated = $this->validated($request);
+
+        $rule->update($validated);
         $this->dbRuleOverrides->invalidate();
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::RULE_CHANGED,
+            botId: $rule->bot_id,
+            subjectType: 'antispam_rule',
+            subjectId: $rule->id,
+            actorId: $request->user()?->id,
+            newState: $validated,
+        ));
 
         return to_route('antispam.rules.index');
     }
@@ -55,6 +76,15 @@ class AntispamRulesController
     {
         $rule->delete();
         $this->dbRuleOverrides->invalidate();
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::RULE_DELETED,
+            botId: $rule->bot_id,
+            subjectType: 'antispam_rule',
+            subjectId: $rule->id,
+            actorId: auth()->user()?->id,
+            context: ['name' => (string) $rule->name],
+        ));
 
         return to_route('antispam.rules.index');
     }

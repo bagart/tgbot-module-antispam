@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace BAGArt\TelegramBotAntispam\Enforcement;
 
+use BAGArt\TelegramBotAntispam\Events\AntispamAuditEvent;
 use BAGArt\TelegramBot\Configs\TgBotConfig;
 use BAGArt\TelegramBot\Contracts\Outbound\TgSenderContract;
 use BAGArt\TelegramBot\TgApi\Methods\DTO\BanChatMemberMethodDTO;
@@ -44,6 +45,14 @@ final readonly class ActionExecutor
         };
 
         $this->recorder->markApplied($violation);
+
+        event(new AntispamAuditEvent(
+            AntispamAuditEvent::ENFORCEMENT_APPLIED,
+            botId: (string) $violation->bot_id,
+            subjectType: 'antispam_violation',
+            subjectId: $violation->id,
+            context: ['action' => (string) $violation->enforcement_action, 'chatId' => (int) $violation->chat_id, 'userId' => (int) $violation->user_id],
+        ));
     }
 
     private function restrictOrBan(AntispamViolation $violation, TgBotConfig $botConfig): void

@@ -14,7 +14,7 @@ use BAGArt\TelegramBot\TgApi\Methods\DTO\SendMessageMethodDTO;
 use BAGArt\TelegramBot\TgApi\Types\DTO\MessageTypeDTO;
 use BAGArt\TelegramBotAntispam\AntispamPipeline;
 
-/** /report (as a reply to a spam message) — counts manual reports per chat. */
+/** /report — acknowledgement-only moderation intake: usage hint when sent bare, acceptance ack when sent as a reply to the spam message; persists nothing. */
 final class AntispamReportCommand implements TgModuleProcessorContract
 {
     public const string NAME = 'report';
